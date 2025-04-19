@@ -12,6 +12,7 @@ import {
 import CreateProjectModal from "@/components/projects/CreateProjectModal";
 import DemoNotice from "@/components/common/DemoNotice";
 import { useAuth } from "@/hooks/useAuth";
+import SupabaseConnectionTest from "@/components/SupabaseConnectionTest";
 
 const HomePage = () => {
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -29,6 +30,9 @@ const HomePage = () => {
       {isDemoAccount && showDemoNotice && (
         <DemoNotice onClose={() => setShowDemoNotice(false)} />
       )}
+
+      {/* Supabase Connection Test */}
+      <SupabaseConnectionTest />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">FoodBase Dashboard</h1>
         <div className="flex items-center gap-2">

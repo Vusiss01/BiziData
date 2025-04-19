@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Save, Database } from "lucide-react";
-import { getFoodBaseClient } from "@/hooks/useAuth";
+import { getSupabaseClient } from "@/hooks/useAuth";
 
 interface Field {
   name: string;
@@ -142,9 +142,12 @@ const SchemaBuilder: React.FC<SchemaBuilderProps> = ({
 
     setSaving(true);
     try {
-      const foodbase = getFoodBaseClient();
-      const schemaCollection = foodbase.collection("schemas");
-      await schemaCollection.add(schema);
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('schemas')
+        .insert(schema);
+
+      if (error) throw error;
 
       if (onSave) {
         onSave(schema);

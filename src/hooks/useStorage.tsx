@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getFoodBaseClient } from "./useAuth";
+import { getSupabaseClient } from "./useAuth";
 
 export const useStorage = () => {
   const [uploading, setUploading] = useState(false);
@@ -14,29 +14,38 @@ export const useStorage = () => {
     setUrl(null);
 
     try {
-      const foodbase = getFoodBaseClient();
-      const storage = foodbase.getStorage();
-      const storageRef = storage.ref(path);
+      const supabase = getSupabaseClient();
 
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          const newProgress = prev + 10;
-          if (newProgress >= 100) {
-            clearInterval(progressInterval);
-            return 100;
-          }
-          return newProgress;
-        });
-      }, 200);
+      // Extract bucket name and file path from the path string
+      // Expected format: 'bucket-name/file-path'
+      const [bucketName, ...filePath] = path.split('/');
+      const filePathStr = filePath.join('/');
+
+      if (!bucketName || !filePathStr) {
+        throw new Error('Invalid path format. Expected format: bucket-name/file-path');
+      }
 
       // Upload the file
-      const result = await storageRef.upload(file, metadata);
-      setUrl(result.url);
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filePathStr, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+          ...(metadata || {})
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePathStr);
+
+      setUrl(publicUrl);
       setUploading(false);
-      clearInterval(progressInterval);
       setProgress(100);
-      return result.url;
+      return publicUrl;
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
       setUploading(false);
@@ -46,11 +55,22 @@ export const useStorage = () => {
 
   const getDownloadURL = async (path: string) => {
     try {
-      const foodbase = getFoodBaseClient();
-      const storage = foodbase.getStorage();
-      const storageRef = storage.ref(path);
-      const downloadUrl = await storageRef.getDownloadURL();
-      return downloadUrl;
+      const supabase = getSupabaseClient();
+
+      // Extract bucket name and file path
+      const [bucketName, ...filePath] = path.split('/');
+      const filePathStr = filePath.join('/');
+
+      if (!bucketName || !filePathStr) {
+        throw new Error('Invalid path format. Expected format: bucket-name/file-path');
+      }
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePathStr);
+
+      return publicUrl;
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
       return null;
@@ -59,10 +79,23 @@ export const useStorage = () => {
 
   const deleteFile = async (path: string) => {
     try {
-      const foodbase = getFoodBaseClient();
-      const storage = foodbase.getStorage();
-      const storageRef = storage.ref(path);
-      await storageRef.delete();
+      const supabase = getSupabaseClient();
+
+      // Extract bucket name and file path
+      const [bucketName, ...filePath] = path.split('/');
+      const filePathStr = filePath.join('/');
+
+      if (!bucketName || !filePathStr) {
+        throw new Error('Invalid path format. Expected format: bucket-name/file-path');
+      }
+
+      // Delete the file
+      const { error: deleteError } = await supabase.storage
+        .from(bucketName)
+        .remove([filePathStr]);
+
+      if (deleteError) throw deleteError;
+
       return true;
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
