@@ -152,31 +152,31 @@ INSERT INTO storage.buckets (id, name) VALUES ('owner-docs', 'Owner Documents') 
 INSERT INTO storage.buckets (id, name) VALUES ('driver-docs', 'Driver Documents') ON CONFLICT DO NOTHING;
 
 -- Storage bucket policies
-CREATE POLICY "Owners can upload their documents" ON storage.objects 
+CREATE POLICY "Owners can upload their documents" ON storage.objects
   FOR INSERT WITH CHECK (
-    bucket_id = 'owner-docs' AND 
+    bucket_id = 'owner-docs' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
 
-CREATE POLICY "Owners can view their own documents" ON storage.objects 
+CREATE POLICY "Owners can view their own documents" ON storage.objects
   FOR SELECT USING (
-    bucket_id = 'owner-docs' AND 
+    bucket_id = 'owner-docs' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
 
-CREATE POLICY "Drivers can upload their documents" ON storage.objects 
+CREATE POLICY "Drivers can upload their documents" ON storage.objects
   FOR INSERT WITH CHECK (
-    bucket_id = 'driver-docs' AND 
+    bucket_id = 'driver-docs' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
 
-CREATE POLICY "Drivers can view their own documents" ON storage.objects 
+CREATE POLICY "Drivers can view their own documents" ON storage.objects
   FOR SELECT USING (
-    bucket_id = 'driver-docs' AND 
+    bucket_id = 'driver-docs' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
 
-CREATE POLICY "Admins can view all documents" ON storage.objects 
+CREATE POLICY "Admins can view all documents" ON storage.objects
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM auth.users
@@ -205,66 +205,66 @@ CREATE POLICY "Drivers can update order status" ON orders FOR UPDATE USING (driv
 
 -- Restaurant locations policies
 CREATE POLICY "Public can view restaurant locations" ON restaurant_locations FOR SELECT USING (status = 'open');
-CREATE POLICY "Restaurant owners can manage their locations" ON restaurant_locations 
+CREATE POLICY "Restaurant owners can manage their locations" ON restaurant_locations
   FOR ALL USING (
     EXISTS (
-      SELECT 1 FROM restaurants 
-      WHERE restaurants.id = restaurant_locations.restaurant_id 
+      SELECT 1 FROM restaurants
+      WHERE restaurants.id = restaurant_locations.restaurant_id
       AND restaurants.owner_id = auth.uid()
     )
   );
 
 -- Menu items policies
 CREATE POLICY "Public can view menu items" ON menu_items FOR SELECT USING (true);
-CREATE POLICY "Restaurant owners can manage menu items" ON menu_items 
+CREATE POLICY "Restaurant owners can manage menu items" ON menu_items
   FOR ALL USING (
     EXISTS (
-      SELECT 1 FROM restaurants 
-      WHERE restaurants.id = menu_items.restaurant_id 
+      SELECT 1 FROM restaurants
+      WHERE restaurants.id = menu_items.restaurant_id
       AND restaurants.owner_id = auth.uid()
     )
   );
 
 -- Order items policies
-CREATE POLICY "Customers can view their order items" ON order_items 
+CREATE POLICY "Customers can view their order items" ON order_items
   FOR SELECT USING (
     EXISTS (
-      SELECT 1 FROM orders 
-      WHERE orders.id = order_items.order_id 
+      SELECT 1 FROM orders
+      WHERE orders.id = order_items.order_id
       AND orders.customer_id = auth.uid()
     )
   );
 
 -- Verification documents policies
-CREATE POLICY "Owners can view their verification documents" ON verification_documents 
+CREATE POLICY "Owners can view their verification documents" ON verification_documents
   FOR SELECT USING (owner_id = auth.uid());
-CREATE POLICY "Owners can submit verification documents" ON verification_documents 
+CREATE POLICY "Owners can submit verification documents" ON verification_documents
   FOR INSERT WITH CHECK (owner_id = auth.uid());
-CREATE POLICY "Admins can review verification documents" ON verification_documents 
+CREATE POLICY "Admins can review verification documents" ON verification_documents
   FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
 
 -- Driver documents policies
-CREATE POLICY "Drivers can view their documents" ON driver_documents 
+CREATE POLICY "Drivers can view their documents" ON driver_documents
   FOR SELECT USING (driver_id = auth.uid());
-CREATE POLICY "Drivers can submit documents" ON driver_documents 
+CREATE POLICY "Drivers can submit documents" ON driver_documents
   FOR INSERT WITH CHECK (driver_id = auth.uid());
-CREATE POLICY "Admins can review driver documents" ON driver_documents 
+CREATE POLICY "Admins can review driver documents" ON driver_documents
   FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
 
 -- Driver queue policies
-CREATE POLICY "Drivers can view their queue status" ON driver_queue 
+CREATE POLICY "Drivers can view their queue status" ON driver_queue
   FOR SELECT USING (driver_id = auth.uid());
-CREATE POLICY "Drivers can update their queue status" ON driver_queue 
+CREATE POLICY "Drivers can update their queue status" ON driver_queue
   FOR UPDATE USING (driver_id = auth.uid());
-CREATE POLICY "Admins can manage driver queue" ON driver_queue 
+CREATE POLICY "Admins can manage driver queue" ON driver_queue
   FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
 
 -- Discounts policies
-CREATE POLICY "Public can view active discounts" ON discounts 
+CREATE POLICY "Public can view active discounts" ON discounts
   FOR SELECT USING (
     start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
   );
-CREATE POLICY "Restaurant owners can manage discounts" ON discounts 
+CREATE POLICY "Restaurant owners can manage discounts" ON discounts
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM restaurant_locations
@@ -276,7 +276,7 @@ CREATE POLICY "Restaurant owners can manage discounts" ON discounts
 
 -- Delivery info policies
 CREATE POLICY "Public can view delivery info" ON delivery_info FOR SELECT USING (true);
-CREATE POLICY "Restaurant owners can manage delivery info" ON delivery_info 
+CREATE POLICY "Restaurant owners can manage delivery info" ON delivery_info
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM restaurant_locations
@@ -288,5 +288,104 @@ CREATE POLICY "Restaurant owners can manage delivery info" ON delivery_info
 
 -- Regions policies
 CREATE POLICY "Public can view regions" ON regions FOR SELECT USING (true);
-CREATE POLICY "Admins can manage regions" ON regions 
+CREATE POLICY "Admins can manage regions" ON regions
   FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
+
+-- Database functions to bypass RLS for specific operations
+
+-- Function to get a user profile by ID
+CREATE OR REPLACE FUNCTION get_user_profile(user_id UUID)
+RETURNS TABLE (
+  id UUID,
+  email TEXT,
+  role TEXT,
+  name TEXT,
+  phone TEXT,
+  address TEXT,
+  current_suburb TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+)
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT u.id, u.email, u.role, u.name, u.phone, u.address, u.current_suburb, u.created_at, u.updated_at
+  FROM users u
+  WHERE u.id = user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update or insert a user profile
+CREATE OR REPLACE FUNCTION update_user_profile(
+  user_id UUID,
+  user_email TEXT,
+  user_name TEXT,
+  user_role TEXT,
+  user_phone TEXT,
+  user_address TEXT,
+  user_suburb TEXT
+)
+RETURNS BOOLEAN
+SECURITY DEFINER
+AS $$
+DECLARE
+  user_exists BOOLEAN;
+  auth_user RECORD;
+BEGIN
+  -- Check if user exists
+  SELECT EXISTS(SELECT 1 FROM users WHERE id = user_id) INTO user_exists;
+
+  -- Also update the auth.users metadata to ensure consistency
+  BEGIN
+    UPDATE auth.users
+    SET raw_user_meta_data =
+      CASE
+        WHEN raw_user_meta_data IS NULL THEN jsonb_build_object('name', user_name)
+        ELSE jsonb_set(raw_user_meta_data, '{name}', to_jsonb(user_name))
+      END
+    WHERE id = user_id;
+  EXCEPTION WHEN OTHERS THEN
+    -- Ignore errors updating auth.users as we may not have permission
+    RAISE NOTICE 'Could not update auth.users metadata: %', SQLERRM;
+  END;
+
+  IF user_exists THEN
+    -- Update existing user
+    UPDATE users
+    SET
+      name = user_name,
+      role = user_role,
+      phone = user_phone,
+      address = user_address,
+      current_suburb = user_suburb,
+      updated_at = NOW()
+    WHERE id = user_id;
+  ELSE
+    -- Insert new user
+    INSERT INTO users (
+      id,
+      email,
+      name,
+      role,
+      phone,
+      address,
+      current_suburb,
+      created_at,
+      updated_at
+    ) VALUES (
+      user_id,
+      user_email,
+      user_name,
+      user_role,
+      user_phone,
+      user_address,
+      user_suburb,
+      NOW(),
+      NOW()
+    );
+  END IF;
+
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;

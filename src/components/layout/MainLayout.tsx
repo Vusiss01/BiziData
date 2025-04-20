@@ -1,13 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import AIChatAssistant from "@/components/ai/AIChatAssistant";
 import { Button } from "@/components/ui/button";
 import { MessageSquare } from "lucide-react";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 const MainLayout = () => {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+
+  // Load the user profile data at the layout level
+  // This ensures the data is available for all components
+  const { profile } = useUserProfile();
 
   return (
     <div className="flex h-screen bg-gray-50">

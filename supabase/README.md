@@ -19,8 +19,9 @@ This will create all tables, enable RLS, create storage buckets, and apply all s
 If you prefer to apply the setup in stages, you can use these individual files:
 
 - `schema.sql` - Creates the database tables
-- `storage-policies.sql` - Sets up storage buckets and policies
 - `rls-policies.sql` - Applies Row Level Security policies
+- `storage-policies.sql` - Sets up storage buckets and policies
+- `functions.sql` - Creates database functions for profile management
 
 ## Storage Buckets Setup
 

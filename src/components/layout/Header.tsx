@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Search, ChevronDown, AlertCircle } from "lucide-react";
+import { Bell, Search, ChevronDown, AlertCircle, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useNavigate } from "react-router-dom";
 
 interface HeaderProps {
@@ -21,9 +22,11 @@ interface HeaderProps {
 
 const Header = ({ userName, userAvatar }: HeaderProps) => {
   const { user, logout, isDemoAccount } = useAuth();
+  const { profile, loading } = useUserProfile();
   const navigate = useNavigate();
 
-  const displayName = userName || user?.displayName || "User";
+  // Use profile name from database if available, fall back to props or auth metadata
+  const displayName = userName || (profile ? profile.name : user?.user_metadata?.name) || "User";
   const avatarUrl =
     userAvatar ||
     user?.photoURL ||
@@ -84,7 +87,7 @@ const Header = ({ userName, userAvatar }: HeaderProps) => {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem>
             <DropdownMenuItem>API Keys</DropdownMenuItem>
             <DropdownMenuItem>Billing</DropdownMenuItem>
             <DropdownMenuSeparator />
