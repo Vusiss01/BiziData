@@ -1,0 +1,149 @@
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Plus, Search, UserCog } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const RestaurantOwnersPage = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Mock data for restaurant owners
+  const owners = [
+    {
+      id: "1",
+      name: "John Smith",
+      email: "john.smith@example.com",
+      restaurants: ["Pizza Palace", "Pasta Paradise"],
+      status: "verified",
+      joinDate: "2023-01-15",
+    },
+    {
+      id: "2",
+      name: "Sarah Johnson",
+      email: "sarah.j@example.com",
+      restaurants: ["Burger Bonanza"],
+      status: "verified",
+      joinDate: "2023-02-20",
+    },
+    {
+      id: "3",
+      name: "Michael Wong",
+      email: "m.wong@example.com",
+      restaurants: ["Sushi Supreme", "Noodle House"],
+      status: "pending",
+      joinDate: "2023-03-10",
+    },
+    {
+      id: "4",
+      name: "Lisa Garcia",
+      email: "lisa.g@example.com",
+      restaurants: ["Taco Time"],
+      status: "pending",
+      joinDate: "2023-04-05",
+    },
+  ];
+
+  const filteredOwners = owners.filter((owner) =>
+    owner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    owner.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Restaurant Owners</h1>
+        <Button className="bg-orange-600 hover:bg-orange-700">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Owner
+        </Button>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Input
+            type="search"
+            placeholder="Search owners..."
+            className="pl-8"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Button variant="outline">Filter</Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Owner</TableHead>
+                <TableHead>Restaurants</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Join Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredOwners.map((owner) => (
+                <TableRow key={owner.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${owner.name}`} />
+                        <AvatarFallback>
+                          <UserCog className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{owner.name}</div>
+                        <div className="text-sm text-gray-500">{owner.email}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {owner.restaurants.map((restaurant, index) => (
+                        <div key={index} className="text-sm">
+                          {restaurant}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        owner.status === "verified"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {owner.status === "verified" ? "Verified" : "Pending"}
+                    </span>
+                  </TableCell>
+                  <TableCell>{owner.joinDate}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm">
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default RestaurantOwnersPage;

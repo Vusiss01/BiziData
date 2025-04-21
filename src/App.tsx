@@ -7,6 +7,9 @@ import DataModelsPage from "./pages/DataModelsPage";
 import OrdersPage from "./pages/OrdersPage";
 import CreateModelPage from "./pages/CreateModelPage";
 import ProfilePage from "./pages/ProfilePage";
+import RestaurantsPage from "./pages/RestaurantsPage";
+import RestaurantOwnersPage from "./pages/RestaurantOwnersPage";
+import DriversPage from "./pages/DriversPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
@@ -33,6 +36,9 @@ function App() {
               <Route path="/data-models/create" element={<CreateModelPage />} />
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/restaurants" element={<RestaurantsPage />} />
+              <Route path="/restaurant-owners" element={<RestaurantOwnersPage />} />
+              <Route path="/drivers" element={<DriversPage />} />
             </Route>
           </Routes>
           {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}

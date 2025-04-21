@@ -14,6 +14,9 @@ import {
   Database,
   Download,
   LayoutDashboard,
+  Store,
+  UserCog,
+  Car,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -27,6 +30,9 @@ const Sidebar = ({ className }: SidebarProps) => {
   const menuItems = [
     { icon: Home, label: "Home", path: "/" },
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: Store, label: "Restaurants", path: "/restaurants" },
+    { icon: UserCog, label: "Restaurant Owners", path: "/restaurant-owners" },
+    { icon: Car, label: "Drivers", path: "/drivers" },
     { icon: ShoppingBag, label: "Orders", path: "/orders", badge: 12 },
     { icon: Utensils, label: "Menu Items", path: "/menu-items" },
     { icon: Package, label: "Inventory", path: "/inventory" },
