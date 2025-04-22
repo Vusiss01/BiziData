@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, UserCog } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import AddOwnerForm from "@/components/users/AddOwnerForm";
+import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
 import {
   Table,
   TableBody,
@@ -15,9 +18,57 @@ import {
 
 const RestaurantOwnersPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [owners, setOwners] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const supabase = getSupabaseClient();
 
-  // Mock data for restaurant owners
-  const owners = [
+  // Fetch restaurant owners from the database
+  useEffect(() => {
+    const fetchOwners = async () => {
+      if (!user) return;
+
+      setLoading(true);
+      try {
+        // Fetch users with restaurant_owner role
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, name, email, role, is_verified, created_at')
+          .eq('role', 'restaurant_owner');
+
+        if (error) throw error;
+
+        // Fetch restaurants for each owner
+        const ownersWithRestaurants = await Promise.all(
+          (data || []).map(async (owner) => {
+            const { data: restaurants, error: restaurantError } = await supabase
+              .from('restaurants')
+              .select('name')
+              .eq('owner_id', owner.id);
+
+            return {
+              ...owner,
+              restaurants: restaurants?.map(r => r.name) || [],
+              status: owner.is_verified ? 'verified' : 'pending',
+              joinDate: new Date(owner.created_at).toISOString().split('T')[0]
+            };
+          })
+        );
+
+        setOwners(ownersWithRestaurants);
+      } catch (error) {
+        console.error('Error fetching restaurant owners:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOwners();
+  }, [user, supabase]);
+
+  // Fallback mock data if no owners found
+  const mockOwners = [
     {
       id: "1",
       name: "John Smith",
@@ -52,6 +103,13 @@ const RestaurantOwnersPage = () => {
     },
   ];
 
+  // Use mock data if no owners found and not loading
+  useEffect(() => {
+    if (!loading && owners.length === 0) {
+      setOwners(mockOwners);
+    }
+  }, [loading]);
+
   const filteredOwners = owners.filter((owner) =>
     owner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     owner.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -61,7 +119,10 @@ const RestaurantOwnersPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Restaurant Owners</h1>
-        <Button className="bg-orange-600 hover:bg-orange-700">
+        <Button
+          className="bg-orange-600 hover:bg-orange-700"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Owner
         </Button>
@@ -142,6 +203,52 @@ const RestaurantOwnersPage = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Add Owner Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] p-0 overflow-hidden">
+          <AddOwnerForm
+            onClose={() => setIsAddDialogOpen(false)}
+            onSuccess={() => {
+              // Refresh the owners list
+              const fetchOwners = async () => {
+                if (!user) return;
+
+                try {
+                  const { data, error } = await supabase
+                    .from('users')
+                    .select('id, name, email, role, is_verified, created_at')
+                    .eq('role', 'restaurant_owner');
+
+                  if (error) throw error;
+
+                  const ownersWithRestaurants = await Promise.all(
+                    (data || []).map(async (owner) => {
+                      const { data: restaurants, error: restaurantError } = await supabase
+                        .from('restaurants')
+                        .select('name')
+                        .eq('owner_id', owner.id);
+
+                      return {
+                        ...owner,
+                        restaurants: restaurants?.map(r => r.name) || [],
+                        status: owner.is_verified ? 'verified' : 'pending',
+                        joinDate: new Date(owner.created_at).toISOString().split('T')[0]
+                      };
+                    })
+                  );
+
+                  setOwners(ownersWithRestaurants);
+                } catch (error) {
+                  console.error('Error refreshing restaurant owners:', error);
+                }
+              };
+
+              fetchOwners();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

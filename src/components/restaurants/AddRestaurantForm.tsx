@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -24,6 +25,23 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Define working hours type
+interface WorkingHoursItem {
+  open: string;
+  close: string;
+  closed: boolean;
+}
+
+interface WorkingHours {
+  monday: WorkingHoursItem;
+  tuesday: WorkingHoursItem;
+  wednesday: WorkingHoursItem;
+  thursday: WorkingHoursItem;
+  friday: WorkingHoursItem;
+  saturday: WorkingHoursItem;
+  sunday: WorkingHoursItem;
+}
+
 interface User {
   id: string;
   name: string;
@@ -41,7 +59,7 @@ const AddRestaurantForm = ({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     // Restaurant details
     name: "",
     logo_url: "",
@@ -57,6 +75,17 @@ const AddRestaurantForm = ({ onClose, onSuccess }: { onClose: () => void; onSucc
     latitude: "",
     longitude: "",
     location_status: "open", // Default location status
+
+    // Working hours
+    working_hours: {
+      monday: { open: '09:00', close: '17:00', closed: false },
+      tuesday: { open: '09:00', close: '17:00', closed: false },
+      wednesday: { open: '09:00', close: '17:00', closed: false },
+      thursday: { open: '09:00', close: '17:00', closed: false },
+      friday: { open: '09:00', close: '17:00', closed: false },
+      saturday: { open: '10:00', close: '15:00', closed: false },
+      sunday: { open: '10:00', close: '15:00', closed: true },
+    }
   });
 
   // Fetch users for the owner dropdown
@@ -147,6 +176,20 @@ const AddRestaurantForm = ({ onClose, onSuccess }: { onClose: () => void; onSucc
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Handle working hours changes
+  const handleWorkingHoursChange = (day: keyof WorkingHours, field: keyof WorkingHoursItem, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      working_hours: {
+        ...prev.working_hours,
+        [day]: {
+          ...prev.working_hours[day],
+          [field]: value
+        }
+      }
+    }));
+  };
+
   const handleStatusChange = (value: string) => {
     setFormData((prev) => ({ ...prev, status: value }));
   };
@@ -164,6 +207,7 @@ const AddRestaurantForm = ({ onClose, onSuccess }: { onClose: () => void; onSucc
         logo_url: formData.logo_url || null,
         cover_page_url: formData.cover_page_url || null,
         status: formData.status,
+        working_hours: formData.working_hours,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).select();
@@ -506,6 +550,57 @@ const AddRestaurantForm = ({ onClose, onSuccess }: { onClose: () => void; onSucc
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="pt-6 mt-6">
+            <div className="text-lg font-medium mb-4 pb-2 border-b">Working Hours</div>
+
+            <div className="space-y-4">
+              {Object.entries(formData.working_hours).map(([day, hours]) => (
+                <div key={day} className="flex items-center space-x-4">
+                  <div className="w-28">
+                    <Label className="text-sm font-medium capitalize">{day}</Label>
+                  </div>
+
+                  <div className="flex-1 flex items-center space-x-3">
+                    <Switch
+                      checked={!hours.closed}
+                      onCheckedChange={(checked) => handleWorkingHoursChange(day as keyof WorkingHours, 'closed', !checked)}
+                      className="data-[state=checked]:bg-orange-500"
+                    />
+
+                    {!hours.closed ? (
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor={`${day}-open`} className="text-xs text-gray-500 mb-1 block">Open</Label>
+                          <Input
+                            id={`${day}-open`}
+                            type="time"
+                            value={hours.open}
+                            onChange={(e) => handleWorkingHoursChange(day as keyof WorkingHours, 'open', e.target.value)}
+                            className="h-9 focus-visible:ring-orange-500"
+                            disabled={hours.closed}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`${day}-close`} className="text-xs text-gray-500 mb-1 block">Close</Label>
+                          <Input
+                            id={`${day}-close`}
+                            type="time"
+                            value={hours.close}
+                            onChange={(e) => handleWorkingHoursChange(day as keyof WorkingHours, 'close', e.target.value)}
+                            className="h-9 focus-visible:ring-orange-500"
+                            disabled={hours.closed}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-500 italic">Closed</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

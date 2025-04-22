@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, Car, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import AddDriverForm from "@/components/users/AddDriverForm";
+import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
 import {
   Table,
   TableBody,
@@ -16,9 +19,53 @@ import { Badge } from "@/components/ui/badge";
 
 const DriversPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const supabase = getSupabaseClient();
 
-  // Mock data for drivers
-  const drivers = [
+  // Fetch drivers from the database
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      if (!user) return;
+
+      setLoading(true);
+      try {
+        // Fetch users with driver role
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, name, email, phone, role, current_suburb, is_verified, created_at')
+          .eq('role', 'driver');
+
+        if (error) throw error;
+
+        // Process driver data
+        const processedDrivers = (data || []).map(driver => ({
+          id: driver.id,
+          name: driver.name,
+          email: driver.email,
+          phone: driver.phone || 'No phone',
+          status: driver.is_verified ? 'active' : 'inactive',
+          currentLocation: driver.current_suburb || 'Unknown',
+          completedOrders: 0, // We would fetch this from orders table in a real app
+          rating: 0, // We would calculate this from ratings in a real app
+          vehicleType: 'Car' // This would come from a driver_details table in a real app
+        }));
+
+        setDrivers(processedDrivers);
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDrivers();
+  }, [user, supabase]);
+
+  // Fallback mock data if no drivers found
+  const mockDrivers = [
     {
       id: "1",
       name: "David Chen",
@@ -65,6 +112,13 @@ const DriversPage = () => {
     },
   ];
 
+  // Use mock data if no drivers found and not loading
+  useEffect(() => {
+    if (!loading && drivers.length === 0) {
+      setDrivers(mockDrivers);
+    }
+  }, [loading]);
+
   const filteredDrivers = drivers.filter(
     (driver) =>
       driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -76,7 +130,10 @@ const DriversPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Drivers</h1>
-        <Button className="bg-orange-600 hover:bg-orange-700">
+        <Button
+          className="bg-orange-600 hover:bg-orange-700"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Driver
         </Button>
@@ -164,6 +221,48 @@ const DriversPage = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Add Driver Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] p-0 overflow-hidden">
+          <AddDriverForm
+            onClose={() => setIsAddDialogOpen(false)}
+            onSuccess={() => {
+              // Refresh the drivers list
+              const fetchDrivers = async () => {
+                if (!user) return;
+
+                try {
+                  const { data, error } = await supabase
+                    .from('users')
+                    .select('id, name, email, phone, role, current_suburb, is_verified, created_at')
+                    .eq('role', 'driver');
+
+                  if (error) throw error;
+
+                  const processedDrivers = (data || []).map(driver => ({
+                    id: driver.id,
+                    name: driver.name,
+                    email: driver.email,
+                    phone: driver.phone || 'No phone',
+                    status: driver.is_verified ? 'active' : 'inactive',
+                    currentLocation: driver.current_suburb || 'Unknown',
+                    completedOrders: 0,
+                    rating: 0,
+                    vehicleType: 'Car'
+                  }));
+
+                  setDrivers(processedDrivers);
+                } catch (error) {
+                  console.error('Error refreshing drivers:', error);
+                }
+              };
+
+              fetchDrivers();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
