@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Upload, MapPin, Car } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -23,8 +22,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { createUser } from "@/services/userService";
+import useErrorHandler from "@/hooks/useErrorHandler";
+import ErrorDisplay from "@/components/common/ErrorDisplay";
+import { ErrorCategory } from "@/utils/errorHandler";
+import FileUpload from "@/components/common/FileUpload";
 
 interface AddDriverFormProps {
   onClose: () => void;
@@ -38,18 +41,24 @@ interface Region {
 
 const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
   const { user } = useAuth();
-  const supabase = getSupabaseClient();
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
-  const [licensePreview, setLicensePreview] = useState<string | null>(null);
   const [vehicleFile, setVehicleFile] = useState<File | null>(null);
-  const [vehiclePreview, setVehiclePreview] = useState<string | null>(null);
   const [regions, setRegions] = useState<Region[]>([]);
   const [loadingRegions, setLoadingRegions] = useState(false);
+  const [isVerified, setIsVerified] = useState(true);
+
+  // Use our custom error handler
+  const {
+    error: formError,
+    isLoading: loading,
+    handleAsync,
+    clearError
+  } = useErrorHandler({
+    component: 'AddDriverForm',
+    showToast: false, // We'll handle toasts manually
+  });
 
   const [formData, setFormData] = useState({
     // User details
@@ -81,70 +90,22 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
     const fetchRegions = async () => {
       setLoadingRegions(true);
       try {
-        // First check if regions table exists
-        const { error: tableCheckError } = await supabase
-          .from('regions')
-          .select('id')
-          .limit(1);
-
-        // If table doesn't exist or there's an error, create mock regions
-        if (tableCheckError) {
-          console.log('Regions table may not exist, using mock data');
-          const mockRegionData = [
-            { id: 'region-1', name: 'Downtown' },
-            { id: 'region-2', name: 'Uptown' },
-            { id: 'region-3', name: 'Midtown' },
-            { id: 'region-4', name: 'West End' },
-            { id: 'region-5', name: 'East Side' }
-          ];
-          setRegions(mockRegionData);
-          setFormData(prev => ({ ...prev, region_id: mockRegionData[0].id }));
-          return;
-        }
-
-        // If table exists, try to fetch regions
-        const { data, error } = await supabase
-          .from('regions')
-          .select('id, name');
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setRegions(data);
-          setFormData(prev => ({ ...prev, region_id: data[0].id }));
-        } else {
-          // No regions found, create a default one
-          try {
-            const { data: newRegion, error: createError } = await supabase
-              .from('regions')
-              .insert({ name: 'Default Region' })
-              .select();
-
-            if (createError) throw createError;
-
-            if (newRegion && newRegion.length > 0) {
-              setRegions(newRegion);
-              setFormData(prev => ({ ...prev, region_id: newRegion[0].id }));
-            }
-          } catch (insertError) {
-            console.error('Error creating default region:', insertError);
-            // Fall back to mock data if we can't create a region
-            const mockRegionData = [
-              { id: 'region-1', name: 'Downtown' },
-              { id: 'region-2', name: 'Uptown' }
-            ];
-            setRegions(mockRegionData);
-            setFormData(prev => ({ ...prev, region_id: mockRegionData[0].id }));
-          }
-        }
+        // Use mock data for now
+        const mockRegionData = [
+          { id: 'region-1', name: 'Downtown' },
+          { id: 'region-2', name: 'Uptown' },
+          { id: 'region-3', name: 'Midtown' },
+          { id: 'region-4', name: 'West End' },
+          { id: 'region-5', name: 'East Side' }
+        ];
+        setRegions(mockRegionData);
+        setFormData(prev => ({ ...prev, region_id: mockRegionData[0].id }));
       } catch (error) {
         console.error('Error fetching regions:', error);
         // Fall back to mock data
         const mockRegionData = [
           { id: 'region-1', name: 'Downtown' },
-          { id: 'region-2', name: 'Uptown' },
-          { id: 'region-3', name: 'Midtown' },
-          { id: 'region-4', name: 'West End' }
+          { id: 'region-2', name: 'Uptown' }
         ];
         setRegions(mockRegionData);
         setFormData(prev => ({ ...prev, region_id: mockRegionData[0].id }));
@@ -154,7 +115,7 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
     };
 
     fetchRegions();
-  }, [supabase]);
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -167,299 +128,80 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleVerifiedChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, is_verified: checked }));
-  };
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setAvatarFile(file);
-
-      // Create a preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleLicenseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setLicenseFile(file);
-
-      // Create a preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLicensePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleVehicleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setVehicleFile(file);
-
-      // Create a preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setVehiclePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const uploadAvatar = async (userId: string): Promise<string | null> => {
-    if (!avatarFile) return null;
-
-    try {
-      const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${userId}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('user-avatars')
-        .upload(filePath, avatarFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('user-avatars')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      return null;
-    }
-  };
-
-  const uploadLicense = async (userId: string): Promise<string | null> => {
-    if (!licenseFile) return null;
-
-    try {
-      const fileExt = licenseFile.name.split('.').pop();
-      const fileName = `${userId}-license-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `driver-documents/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('driver-documents')
-        .upload(filePath, licenseFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('driver-documents')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading license:', error);
-      return null;
-    }
-  };
-
-  const uploadVehicleImage = async (userId: string): Promise<string | null> => {
-    if (!vehicleFile) return null;
-
-    try {
-      const fileExt = vehicleFile.name.split('.').pop();
-      const fileName = `${userId}-vehicle-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `vehicle-images/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('vehicle-images')
-        .upload(filePath, vehicleFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('vehicle-images')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading vehicle image:', error);
-      return null;
-    }
-  };
+  // No longer needed with our new FileUpload component
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    clearError();
 
-    setLoading(true);
-    try {
-      // First, create the user in auth
-      // Note: Using signUp instead of admin.createUser as it might not be available in all Supabase instances
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-            role: formData.role,
-          }
-        }
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (!authData.user) {
-        throw new Error("Failed to create user");
-      }
-
-      // Since we're using signUp, we need to manually confirm the email
-      // In a real app, you'd use admin functions or email confirmation
-      // For this demo, we'll just create the user record
-
-      // Upload avatar if provided
-      let avatarUrl = formData.avatar_url;
-      if (avatarFile) {
-        const uploadedUrl = await uploadAvatar(authData.user.id);
-        if (uploadedUrl) {
-          avatarUrl = uploadedUrl;
-        }
-      }
-
-      // Upload vehicle image if provided
-      let vehicleImageUrl = formData.vehicle_image_url;
-      if (vehicleFile) {
-        const uploadedUrl = await uploadVehicleImage(authData.user.id);
-        if (uploadedUrl) {
-          vehicleImageUrl = uploadedUrl;
-        }
-      }
-
-      // Then, add the user to our users table
-      const { error: userError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone || null,
-        address: formData.address || null,
-        role: formData.role,
-        display_name: formData.display_name || formData.name,
-        avatar_url: avatarUrl || null,
-        is_verified: formData.is_verified,
-        current_suburb: formData.current_suburb || null,
-        vehicle_image_url: vehicleImageUrl || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        created_by: user.id,
-      });
-
-      if (userError) {
-        throw userError;
-      }
-
-      // Upload license document if provided
-      if (licenseFile) {
-        const licenseUrl = await uploadLicense(authData.user.id);
-
-        if (licenseUrl) {
-          try {
-            // First check if driver_documents table exists
-            const { error: tableCheckError } = await supabase
-              .from('driver_documents')
-              .select('id')
-              .limit(1);
-
-            // Only insert if the table exists
-            if (!tableCheckError) {
-              // Add driver document record
-              const { error: docError } = await supabase.from("driver_documents").insert({
-                driver_id: authData.user.id,
-                document_type: formData.document_type,
-                file_url: licenseUrl,
-                status: 'approved', // Auto-approve since admin is creating
-                submitted_at: new Date().toISOString(),
-                reviewed_at: new Date().toISOString(),
-                reviewed_by: user.id,
-              });
-
-              if (docError) {
-                console.error("Error adding driver document:", docError);
-                // We don't throw here because the user was still created successfully
-              }
-            } else {
-              console.log('Driver documents table may not exist, skipping document insertion');
-            }
-          } catch (docError) {
-            console.error("Error with driver document operation:", docError);
-            // We don't throw here because the user was still created successfully
-          }
-        }
-      }
-
-      // Add driver to the queue for their selected region
-      if (formData.region_id) {
-        try {
-          // First check if driver_queue table exists
-          const { error: tableCheckError } = await supabase
-            .from('driver_queue')
-            .select('id')
-            .limit(1);
-
-          // Only insert if the table exists
-          if (!tableCheckError) {
-            const { error: queueError } = await supabase.from("driver_queue").insert({
-              driver_id: authData.user.id,
-              region_id: formData.region_id,
-              login_at: new Date().toISOString(),
-              status: 'offline', // Default status for new drivers
-            });
-
-            if (queueError) {
-              console.error("Error adding driver to queue:", queueError);
-              // We don't throw here because the user was still created successfully
-            }
-          } else {
-            console.log('Driver queue table may not exist, skipping queue insertion');
-          }
-        } catch (queueError) {
-          console.error("Error with driver queue operation:", queueError);
-          // We don't throw here because the user was still created successfully
-        }
-      }
-
+    if (!user) {
       toast({
-        title: "Success",
-        description: "Driver added successfully",
-      });
-
-      // Call the success callback if provided
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      // Close the form
-      onClose();
-    } catch (error: any) {
-      console.error("Error adding driver:", error);
-      toast({
-        title: "Error",
-        description: `Failed to add driver: ${error.message || "Unknown error"}`,
+        title: "Authentication Error",
+        description: "You must be logged in to create a driver",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    // Basic validation
+    if (!formData.name || !formData.email || !formData.password || !formData.phone) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Use our handleAsync utility for better error handling
+    await handleAsync(
+      async () => {
+        // Create user with driver role
+        const result = await createUser({
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+          role: 'driver',
+          phone: formData.phone,
+          address: formData.address,
+          current_suburb: formData.current_suburb,
+          profileImage: profileImage,
+        });
+
+        if (result.error) {
+          throw result.error;
+        }
+
+        if (!result.user) {
+          throw new Error("Failed to create driver");
+        }
+
+        // TODO: Save vehicle details and license to a separate table
+        // This would be implemented in a real application
+
+        toast({
+          title: "Success",
+          description: `Driver "${result.user.name}" created successfully`,
+        });
+
+        // Call success callback
+        if (onSuccess) {
+          onSuccess();
+        }
+
+        // Close form
+        onClose();
+
+        return result;
+      },
+      {
+        action: 'createUser',
+        category: ErrorCategory.AUTHENTICATION,
+        context: { formData },
+        userMessage: "Failed to create driver. Please try again.",
+        showToast: true,
+      }
+    );
   };
 
   return (
@@ -491,29 +233,23 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
 
             {/* Profile Picture */}
             <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={avatarPreview || ""} />
-                <AvatarFallback className="bg-orange-100 text-orange-800 text-xl">
-                  {formData.name ? formData.name.charAt(0).toUpperCase() : "D"}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex items-center">
-                <label
-                  htmlFor="avatar-upload"
-                  className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Photo
-                </label>
-                <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={handleAvatarChange}
+              {formError && (
+                <ErrorDisplay
+                  error={formError}
+                  variant="inline"
+                  onDismiss={clearError}
                 />
-              </div>
+              )}
+
+              <FileUpload
+                label="Profile Image"
+                description="Upload a profile image (JPG, PNG, max 5MB)"
+                accept="image/jpeg,image/png"
+                value={profileImage}
+                onChange={setProfileImage}
+                isUploading={loading}
+                className="w-full max-w-xs mx-auto"
+              />
             </div>
 
             {/* Basic Information */}
@@ -696,92 +432,26 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Driver's License Document *</Label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                  <div className="space-y-1 text-center">
-                    {licensePreview ? (
-                      <div className="flex flex-col items-center">
-                        <img
-                          src={licensePreview}
-                          alt="License preview"
-                          className="max-h-40 max-w-full object-contain mb-2"
-                        />
-                        <p className="text-sm text-gray-500">
-                          {licenseFile?.name}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <Car className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="flex text-sm text-gray-600">
-                          <label
-                            htmlFor="license-upload"
-                            className="relative cursor-pointer rounded-md font-medium text-orange-600 hover:text-orange-500 focus-within:outline-none"
-                          >
-                            <span>Upload license</span>
-                            <input
-                              id="license-upload"
-                              name="license-upload"
-                              type="file"
-                              className="sr-only"
-                              accept="image/*,.pdf"
-                              onChange={handleLicenseChange}
-                              required={!licenseFile}
-                            />
-                          </label>
-                          <p className="pl-1">or drag and drop</p>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          PNG, JPG, PDF up to 10MB
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <FileUpload
+                  label="Driver's License Document"
+                  description="Upload a license document (JPG, PNG, PDF, max 5MB)"
+                  accept="image/jpeg,image/png,application/pdf"
+                  value={licenseFile}
+                  onChange={setLicenseFile}
+                  isUploading={loading}
+                  required={true}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Vehicle Image</Label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                  <div className="space-y-1 text-center">
-                    {vehiclePreview ? (
-                      <div className="flex flex-col items-center">
-                        <img
-                          src={vehiclePreview}
-                          alt="Vehicle preview"
-                          className="max-h-40 max-w-full object-contain mb-2"
-                        />
-                        <p className="text-sm text-gray-500">
-                          {vehicleFile?.name}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <Car className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="flex text-sm text-gray-600">
-                          <label
-                            htmlFor="vehicle-upload"
-                            className="relative cursor-pointer rounded-md font-medium text-orange-600 hover:text-orange-500 focus-within:outline-none"
-                          >
-                            <span>Upload vehicle image</span>
-                            <input
-                              id="vehicle-upload"
-                              name="vehicle-upload"
-                              type="file"
-                              className="sr-only"
-                              accept="image/*"
-                              onChange={handleVehicleImageChange}
-                            />
-                          </label>
-                          <p className="pl-1">or drag and drop</p>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          PNG, JPG up to 10MB
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <FileUpload
+                  label="Vehicle Image"
+                  description="Upload a vehicle image (JPG, PNG, max 5MB)"
+                  accept="image/jpeg,image/png"
+                  value={vehicleFile}
+                  onChange={setVehicleFile}
+                  isUploading={loading}
+                />
                 <p className="text-xs text-gray-500">
                   Photo of the vehicle used for deliveries
                 </p>
@@ -805,8 +475,8 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
             <div className="flex items-center space-x-2">
               <Switch
                 id="is_verified"
-                checked={formData.is_verified}
-                onCheckedChange={handleVerifiedChange}
+                checked={isVerified}
+                onCheckedChange={setIsVerified}
                 className="data-[state=checked]:bg-orange-500"
               />
               <Label htmlFor="is_verified" className="text-sm font-medium">

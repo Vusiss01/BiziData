@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { User as SupabaseUser, AuthError } from "@supabase/supabase-js";
+import { ensureCurrentUser } from "@/utils/userSync";
 
 interface User {
   id: string;
@@ -8,7 +9,6 @@ interface User {
   user_metadata: {
     name?: string;
   };
-  isDemo?: boolean;
 }
 
 interface AuthContextType {
@@ -17,115 +17,38 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
-  isDemoAccount: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Initialize demo data
-const initializeDemoData = async () => {
-  // Check if demo data already exists
-  const { data: existingRestaurants } = await supabase
-    .from('restaurants')
-    .select('id')
-    .limit(1);
+// Initialize user data with timeout
+const initializeUserData = async () => {
+  try {
+    // Add a timeout to the operation
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('User data initialization timed out')), 5000)
+    );
 
-  if (existingRestaurants && existingRestaurants.length > 0) {
-    console.log('Demo data already exists');
-    return;
-  }
+    // Use our new user synchronization utility with a timeout
+    const syncPromise = ensureCurrentUser('admin');
 
-  // Get the demo user ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+    // Race between the actual operation and the timeout
+    const userData = await Promise.race([
+      syncPromise,
+      timeoutPromise
+    ]) as any;
 
-  // Insert the user into the users table with role 'admin'
-  await supabase.from('users').upsert({
-    id: user.id,
-    email: user.email,
-    role: 'admin',
-    name: user.user_metadata.name || 'Demo User',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'id' });
-
-  // Create demo regions
-  const { data: region } = await supabase
-    .from('regions')
-    .insert({ name: 'Downtown' })
-    .select('id')
-    .single();
-
-  if (!region) return;
-
-  // Create demo restaurants
-  const { data: restaurant1 } = await supabase
-    .from('restaurants')
-    .insert({
-      owner_id: user.id,
-      name: 'Pizza Palace',
-      status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .select('id')
-    .single();
-
-  if (restaurant1) {
-    // Create restaurant location
-    const { data: location1 } = await supabase
-      .from('restaurant_locations')
-      .insert({
-        restaurant_id: restaurant1.id,
-        suburb: 'Downtown',
-        street: '123 Main St',
-        city: 'Foodville',
-        status: 'open',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('id')
-      .single();
-
-    // Create menu items
-    if (location1) {
-      await supabase.from('menu_items').insert([
-        {
-          restaurant_id: restaurant1.id,
-          name: 'Margherita Pizza',
-          description: 'Classic tomato and cheese',
-          price: 12.99,
-          category: 'Pizza',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          restaurant_id: restaurant1.id,
-          name: 'Pepperoni Pizza',
-          description: 'Loaded with pepperoni',
-          price: 14.99,
-          category: 'Pizza',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ]);
+    if (!userData) {
+      console.error('Failed to initialize user data');
+      return;
     }
+
+    console.log('User data initialized successfully:', userData.id);
+    return userData;
+  } catch (error) {
+    console.error('Error in initializeUserData:', error);
+    // Continue even if there's an error - don't block the auth flow
   }
-
-  // Create another restaurant
-  const { data: restaurant2 } = await supabase
-    .from('restaurants')
-    .insert({
-      owner_id: user.id,
-      name: 'Burger Bonanza',
-      status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .select('id')
-    .single();
-
-  console.log('Demo data initialized');
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -133,99 +56,117 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemoAccount, setIsDemoAccount] = useState(false);
 
   useEffect(() => {
-    // Set up Supabase auth state listener
+    console.log("Auth - Setting up auth state listener");
+
+    // Initial session check with timeout
+    const checkUser = async () => {
+      console.log("Auth - Checking initial session");
+      setLoading(true);
+
+      // Create a timeout promise
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          console.log("Auth - Session check timed out, continuing as not logged in");
+          setUser(null);
+          setLoading(false);
+          resolve();
+        }, 3000); // 3 second timeout
+      });
+
+      // Create the actual check promise
+      const checkPromise = (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.user) {
+            console.log("Auth - Initial session found, user is logged in");
+            const currentUser = session.user as User;
+            setUser(currentUser);
+
+            // Initialize user data to ensure the user exists in the users table
+            try {
+              await initializeUserData();
+            } catch (error) {
+              console.error("Auth - Error initializing user data:", error);
+            }
+          } else {
+            console.log("Auth - No initial session found, user is not logged in");
+            setUser(null);
+          }
+        } catch (error) {
+          console.error("Auth - Error checking session:", error);
+          setUser(null);
+        } finally {
+          console.log("Auth - Initial session check complete");
+          setLoading(false);
+        }
+      })();
+
+      // Race between the timeout and the actual check
+      await Promise.race([timeoutPromise, checkPromise]);
+    };
+
+    // Run the initial check
+    checkUser();
+
+    // Set up Supabase auth state listener with timeout
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        console.log(`Auth - Auth state changed: ${event}`);
         setLoading(true);
 
-        if (session?.user) {
-          const currentUser = session.user as User;
-
-          // Check if this is the demo account
-          if (currentUser.email === "demo@foodbase.com") {
-            setIsDemoAccount(true);
-            currentUser.isDemo = true;
+        // Set a timeout to ensure loading state doesn't get stuck
+        const timeoutId = setTimeout(() => {
+          console.log("Auth - Auth state change handler timed out");
+          if (session?.user) {
+            const currentUser = session.user as User;
+            setUser(currentUser);
           } else {
-            setIsDemoAccount(false);
+            setUser(null);
           }
+          setLoading(false);
+        }, 3000); // 3 second timeout
 
-          setUser(currentUser);
-        } else {
-          setUser(null);
-          setIsDemoAccount(false);
-        }
+        // Handle the auth state change
+        (async () => {
+          try {
+            if (session?.user) {
+              console.log("Auth - User is now logged in");
+              const currentUser = session.user as User;
+              setUser(currentUser);
 
-        setLoading(false);
+              // Initialize user data to ensure the user exists in the users table
+              if (event === 'SIGNED_IN') {
+                try {
+                  await initializeUserData();
+                } catch (error) {
+                  console.error("Auth - Error initializing user data on sign in:", error);
+                }
+              }
+            } else {
+              console.log("Auth - User is now logged out");
+              setUser(null);
+            }
+          } catch (error) {
+            console.error("Auth - Error in auth state change handler:", error);
+          } finally {
+            console.log("Auth - Auth state change handling complete");
+            clearTimeout(timeoutId); // Clear the timeout if we complete normally
+            setLoading(false);
+          }
+        })();
       }
     );
 
-    // Initial session check
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        const currentUser = session.user as User;
-
-        // Check if this is the demo account
-        if (currentUser.email === "demo@foodbase.com") {
-          setIsDemoAccount(true);
-          currentUser.isDemo = true;
-        }
-
-        setUser(currentUser);
-      }
-
-      setLoading(false);
-    };
-
-    checkUser();
-
     return () => {
+      console.log("Auth - Unsubscribing from auth state changes");
       subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Special handling for demo account
-    if (email === "demo@foodbase.com") {
-      // Try to sign in
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      // If user doesn't exist, create it
-      if (error && error.status === 400) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name: "Demo User",
-            },
-          },
-        });
-
-        if (signUpError) throw signUpError;
-
-        // Initialize demo data
-        if (data.user) {
-          await initializeDemoData();
-        }
-      } else if (error) {
-        throw error;
-      } else {
-        // User exists, initialize demo data if needed
-        await initializeDemoData();
-      }
-
-      setIsDemoAccount(true);
-      return;
-    }
-
     // Regular login
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -233,10 +174,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     if (error) throw error;
+
+    // Initialize user data to ensure the user exists in the users table
+    await initializeUserData();
   };
 
   const signup = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -249,24 +193,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (error) throw error;
 
     // Create a record in the users table
-    const { data: { user: newUser } } = await supabase.auth.getUser();
-
-    if (newUser) {
-      await supabase.from('users').insert({
-        id: newUser.id,
-        email: newUser.email,
-        role: 'customer', // Default role for new users
+    if (data.user) {
+      // Use our new syncUser function to create the user record
+      const { syncUser } = await import('@/utils/userSync');
+      const userData = await syncUser(data.user.id, {
+        email: data.user.email || email,
         name: name,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        role: 'admin' // Set as admin by default as requested
       });
+
+      if (!userData) {
+        console.error('Failed to create user record during signup');
+      } else {
+        console.log('User record created successfully during signup:', userData.id);
+      }
     }
   };
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    setIsDemoAccount(false);
   };
 
   const value = {
@@ -275,7 +221,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     login,
     signup,
     logout,
-    isDemoAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

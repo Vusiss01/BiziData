@@ -26,10 +26,12 @@ const RestaurantsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false to avoid initial loading state
   const [error, setError] = useState<string | null>(null);
   const supabase = getSupabaseClient();
   const { toast } = useToast();
+
+  console.log("RestaurantsPage - Component rendered");
 
   // Fetch restaurants from Supabase
   const fetchRestaurants = async () => {
@@ -62,6 +64,13 @@ const RestaurantsPage = () => {
 
       console.log("Restaurants data:", data);
 
+      // If no data, set empty array
+      if (!data || data.length === 0) {
+        console.log("No restaurants found");
+        setRestaurants([]);
+        return;
+      }
+
       // Process the data to include location information
       const processedData = data.map((restaurant: any) => {
         let location = "";
@@ -83,6 +92,8 @@ const RestaurantsPage = () => {
         description: `Failed to load restaurants: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
+      // Set empty array to avoid undefined errors
+      setRestaurants([]);
     } finally {
       setLoading(false);
     }
@@ -90,6 +101,7 @@ const RestaurantsPage = () => {
 
   // Load restaurants on component mount
   useEffect(() => {
+    console.log("RestaurantsPage - Fetching restaurants on mount");
     fetchRestaurants();
   }, []);
 

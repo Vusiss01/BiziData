@@ -17,6 +17,7 @@ import {
   Store,
   UserCog,
   Car,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -28,18 +29,19 @@ const Sidebar = ({ className }: SidebarProps) => {
   const location = useLocation();
 
   const menuItems = [
-    { icon: Home, label: "Home", path: "/" },
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+    { icon: Home, label: "Home", path: "/home" },
     { icon: Store, label: "Restaurants", path: "/restaurants" },
+    { icon: Users, label: "User Management", path: "/users" },
     { icon: UserCog, label: "Restaurant Owners", path: "/restaurant-owners" },
     { icon: Car, label: "Drivers", path: "/drivers" },
     { icon: ShoppingBag, label: "Orders", path: "/orders", badge: 12 },
     { icon: Utensils, label: "Menu Items", path: "/menu-items" },
     { icon: Package, label: "Inventory", path: "/inventory" },
     { icon: TrendingUp, label: "Analytics", path: "/analytics" },
-    { icon: Users, label: "Customers", path: "/customers" },
     { icon: Database, label: "Data Models", path: "/data-models" },
     { icon: FileText, label: "Documentation", path: "/documentation" },
+    { icon: AlertCircle, label: "Debug", path: "/debug" },
     { icon: HelpCircle, label: "Support", path: "/support" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];

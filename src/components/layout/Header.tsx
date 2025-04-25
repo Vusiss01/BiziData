@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Search, ChevronDown, AlertCircle, Loader2 } from "lucide-react";
+import { Bell, Search, ChevronDown, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,9 +21,12 @@ interface HeaderProps {
 }
 
 const Header = ({ userName, userAvatar }: HeaderProps) => {
-  const { user, logout, isDemoAccount } = useAuth();
+  const { user, logout } = useAuth();
   const { profile, loading } = useUserProfile();
   const navigate = useNavigate();
+
+  // Simple loading indicator for debugging
+  console.log("Header - Profile loading:", loading, "Profile:", profile);
 
   // Use profile name from database if available, fall back to props or auth metadata
   const displayName = userName || (profile ? profile.name : user?.user_metadata?.name) || "User";
@@ -50,12 +53,6 @@ const Header = ({ userName, userAvatar }: HeaderProps) => {
       </div>
 
       <div className="flex items-center gap-4">
-        {isDemoAccount && (
-          <div className="hidden md:flex items-center gap-2 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-md border border-orange-200">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-xs font-medium">Demo Account</span>
-          </div>
-        )}
 
         <Button
           variant="ghost"

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, Upload, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -24,6 +23,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { createUser, CreateUserOptions } from "@/services/userService";
+import useErrorHandler from "@/hooks/useErrorHandler";
+import ErrorDisplay from "@/components/common/ErrorDisplay";
+import { ErrorCategory } from "@/utils/errorHandler";
+import FileUpload from "@/components/common/FileUpload";
 
 interface AddOwnerFormProps {
   onClose: () => void;
@@ -32,25 +36,31 @@ interface AddOwnerFormProps {
 
 const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
   const { user } = useAuth();
-  const supabase = getSupabaseClient();
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [isVerified, setIsVerified] = useState(true);
+  const [bio, setBio] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
+  // Use our custom error handler
+  const {
+    error: formError,
+    isLoading: loading,
+    handleAsync,
+    clearError
+  } = useErrorHandler({
+    component: 'AddOwnerForm',
+    showToast: false, // We'll handle toasts manually
+  });
+
+  // Use state for form data
   const [formData, setFormData] = useState({
-    // User details
     name: "",
     email: "",
     password: "",
     phone: "",
     address: "",
-    bio: "",
-    role: "restaurant_owner", // Default role for this form
-    display_name: "",
-    avatar_url: "",
-    is_verified: true, // Admin-created accounts are verified by default
+    current_suburb: "",
   });
 
   const handleInputChange = (
@@ -60,139 +70,76 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleRoleChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, role: value }));
-  };
-
   const handleVerifiedChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, is_verified: checked }));
+    setIsVerified(checked);
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setAvatarFile(file);
-
-      // Create a preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const uploadAvatar = async (userId: string): Promise<string | null> => {
-    if (!avatarFile) return null;
-
-    try {
-      const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${userId}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('user-avatars')
-        .upload(filePath, avatarFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('user-avatars')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      return null;
-    }
-  };
+  // No need for handleRoleChange as the role is fixed to 'owner'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    clearError();
 
-    setLoading(true);
-    try {
-      // First, create the user in auth
-      // Note: Using signUp instead of admin.createUser as it might not be available in all Supabase instances
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-            role: formData.role,
-          }
-        }
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (!authData.user) {
-        throw new Error("Failed to create user");
-      }
-
-      // Since we're using signUp, we need to manually confirm the email
-      // In a real app, you'd use admin functions or email confirmation
-      // For this demo, we'll just create the user record
-
-      // Upload avatar if provided
-      let avatarUrl = formData.avatar_url;
-      if (avatarFile) {
-        const uploadedUrl = await uploadAvatar(authData.user.id);
-        if (uploadedUrl) {
-          avatarUrl = uploadedUrl;
-        }
-      }
-
-      // Then, add the user to our users table
-      const { error: userError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone || null,
-        address: formData.address || null,
-        bio: formData.bio || null,
-        role: formData.role,
-        display_name: formData.display_name || formData.name,
-        avatar_url: avatarUrl || null,
-        is_verified: formData.is_verified,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        created_by: user.id,
-      });
-
-      if (userError) {
-        throw userError;
-      }
-
+    if (!user) {
       toast({
-        title: "Success",
-        description: "Restaurant owner added successfully",
-      });
-
-      // Call the success callback if provided
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      // Close the form
-      onClose();
-    } catch (error: any) {
-      console.error("Error adding restaurant owner:", error);
-      toast({
-        title: "Error",
-        description: `Failed to add restaurant owner: ${error.message || "Unknown error"}`,
+        title: "Authentication Error",
+        description: "You must be logged in to create a restaurant owner",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    // Basic validation
+    if (!formData.name || !formData.email || !formData.password) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Use our handleAsync utility for better error handling
+    await handleAsync(
+      async () => {
+        // Create user with owner role
+        const result = await createUser({
+          ...formData,
+          role: 'owner',
+          profileImage,
+        });
+
+        if (result.error) {
+          throw result.error;
+        }
+
+        if (!result.user) {
+          throw new Error("Failed to create restaurant owner");
+        }
+
+        toast({
+          title: "Success",
+          description: `Restaurant owner "${result.user.name}" created successfully`,
+        });
+
+        // Call success callback
+        if (onSuccess) {
+          onSuccess();
+        }
+
+        // Close form
+        onClose();
+
+        return result;
+      },
+      {
+        action: 'createUser',
+        category: ErrorCategory.AUTHENTICATION,
+        context: { formData },
+        userMessage: "Failed to create restaurant owner. Please try again.",
+        showToast: true,
+      }
+    );
   };
 
   return (
@@ -224,29 +171,23 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
 
             {/* Profile Picture */}
             <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={avatarPreview || ""} />
-                <AvatarFallback className="bg-orange-100 text-orange-800 text-xl">
-                  {formData.name ? formData.name.charAt(0).toUpperCase() : "U"}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex items-center">
-                <label
-                  htmlFor="avatar-upload"
-                  className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Photo
-                </label>
-                <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={handleAvatarChange}
+              {formError && (
+                <ErrorDisplay
+                  error={formError}
+                  variant="inline"
+                  onDismiss={clearError}
                 />
-              </div>
+              )}
+
+              <FileUpload
+                label="Profile Image"
+                description="Upload a profile image (JPG, PNG, max 5MB)"
+                accept="image/jpeg,image/png"
+                value={profileImage}
+                onChange={setProfileImage}
+                isUploading={loading}
+                className="w-full max-w-xs mx-auto"
+              />
             </div>
 
             {/* Basic Information */}
@@ -269,8 +210,8 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
                 <Input
                   id="display_name"
                   name="display_name"
-                  value={formData.display_name}
-                  onChange={handleInputChange}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Enter display name"
                   className="h-10 focus-visible:ring-orange-500"
                 />
@@ -342,8 +283,8 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
               <Textarea
                 id="bio"
                 name="bio"
-                value={formData.bio}
-                onChange={handleInputChange}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
                 placeholder="Enter bio or description"
                 className="min-h-[100px] focus-visible:ring-orange-500"
               />
@@ -352,27 +293,19 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
             <div className="text-lg font-medium mb-4 pb-2 border-b mt-6">Account Settings</div>
 
             <div className="space-y-2">
-              <Label htmlFor="role" className="text-sm font-medium">User Role *</Label>
-              <Select
-                value={formData.role}
-                onValueChange={handleRoleChange}
-              >
-                <SelectTrigger id="role" className="h-10 focus-visible:ring-orange-500">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="restaurant_owner">Restaurant Owner</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="driver">Driver</SelectItem>
-                  <SelectItem value="customer">Customer</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="role" className="text-sm font-medium">User Role</Label>
+              <div className="h-10 px-3 py-2 rounded-md border border-input bg-gray-100 text-sm">
+                Restaurant Owner
+              </div>
+              <p className="text-xs text-gray-500">
+                This form creates restaurant owner accounts
+              </p>
             </div>
 
             <div className="flex items-center space-x-2">
               <Switch
                 id="is_verified"
-                checked={formData.is_verified}
+                checked={isVerified}
                 onCheckedChange={handleVerifiedChange}
                 className="data-[state=checked]:bg-orange-500"
               />

@@ -3,10 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AuthForm from "./AuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 
 const LoginPage = () => {
-  const { user, login } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -14,15 +13,6 @@ const LoginPage = () => {
       navigate("/");
     }
   }, [user, navigate]);
-
-  const handleDemoLogin = async () => {
-    try {
-      await login("demo@foodbase.com", "demo123");
-      navigate("/");
-    } catch (error) {
-      console.error("Demo login failed:", error);
-    }
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -39,24 +29,7 @@ const LoginPage = () => {
         <CardContent>
           <AuthForm type="login" />
 
-          <div className="mt-6 relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-gray-500">Or</span>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full mt-6 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
-            onClick={handleDemoLogin}
-          >
-            Try Demo Account
-          </Button>
-
-          <div className="mt-4 text-center">
+          <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               Don't have an account?{" "}
               <a href="/signup" className="text-orange-600 hover:underline">

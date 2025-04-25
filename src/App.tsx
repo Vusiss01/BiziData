@@ -8,37 +8,53 @@ import OrdersPage from "./pages/OrdersPage";
 import CreateModelPage from "./pages/CreateModelPage";
 import ProfilePage from "./pages/ProfilePage";
 import RestaurantsPage from "./pages/RestaurantsPage";
+import SimpleRestaurantsPage from "./pages/SimpleRestaurantsPage";
+import TestPage from "./pages/TestPage";
+import BasicRestaurantsPage from "./pages/BasicRestaurantsPage";
+import EnhancedRestaurantsPage from "./pages/EnhancedRestaurantsPage";
 import RestaurantOwnersPage from "./pages/RestaurantOwnersPage";
 import DriversPage from "./pages/DriversPage";
+import DashboardPage from "./pages/DashboardPage";
+import DebugPage from "./pages/DebugPage";
+import UserManagementPage from "./pages/UserManagementPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import { AuthProvider } from "./hooks/useAuth";
 import { Toaster } from "./components/ui/toaster";
 
+import ErrorBoundary from "./components/common/ErrorBoundary";
+
 function App() {
   return (
-    <AuthProvider>
-      <Suspense fallback={<p>Loading...</p>}>
-        <>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <MainLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={<HomePage />} />
+    <ErrorBoundary>
+      <AuthProvider>
+        <Suspense fallback={<p>Loading...</p>}>
+          <>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <MainLayout />
+                  </ProtectedRoute>
+                }
+              >
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/home" element={<HomePage />} />
               <Route path="/data-models" element={<DataModelsPage />} />
               <Route path="/data-models/create" element={<CreateModelPage />} />
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/restaurants" element={<RestaurantsPage />} />
+              <Route path="/test" element={<TestPage />} />
+              <Route path="/restaurants" element={<EnhancedRestaurantsPage />} />
+              <Route path="/restaurants-simple" element={<SimpleRestaurantsPage />} />
+              <Route path="/restaurants-full" element={<RestaurantsPage />} />
               <Route path="/restaurant-owners" element={<RestaurantOwnersPage />} />
               <Route path="/drivers" element={<DriversPage />} />
+              <Route path="/users" element={<UserManagementPage />} />
+              <Route path="/debug" element={<DebugPage />} />
             </Route>
           </Routes>
           {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
@@ -46,6 +62,7 @@ function App() {
       </Suspense>
       <Toaster />
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
