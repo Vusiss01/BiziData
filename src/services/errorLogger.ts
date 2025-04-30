@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabase";
 import { AppError, ErrorSeverity, ErrorCategory } from "@/utils/errorHandler";
 
 /**
@@ -39,38 +38,25 @@ export const configureErrorLogger = (newConfig: Partial<ErrorLoggerConfig>) => {
 
 /**
  * Log an error to the database
+ * This is a placeholder that will be replaced with actual implementation
  */
 const logToDatabase = async (error: AppError): Promise<void> => {
   if (!config.logToDatabase) return;
-  
+
   // Only log errors of specified severity or higher
   if (
     error.severity === ErrorSeverity.INFO && config.minSeverityForDatabase !== ErrorSeverity.INFO ||
     error.severity === ErrorSeverity.WARNING && (
-      config.minSeverityForDatabase !== ErrorSeverity.INFO && 
+      config.minSeverityForDatabase !== ErrorSeverity.INFO &&
       config.minSeverityForDatabase !== ErrorSeverity.WARNING
     )
   ) {
     return;
   }
-  
+
   try {
-    // Get current user ID if available
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id;
-    
-    // Insert error log into database
-    await supabase.from('error_logs').insert({
-      user_id: userId,
-      message: error.message,
-      user_message: error.userMessage,
-      code: error.code,
-      severity: error.severity,
-      category: error.category,
-      context: error.context,
-      error_details: error.originalError ? JSON.stringify(error.originalError) : null,
-      created_at: error.timestamp,
-    });
+    // Database logging not implemented
+    console.log("Database error logging not implemented");
   } catch (err) {
     // If we can't log to the database, at least log to console
     if (config.logToConsole) {
@@ -85,23 +71,23 @@ const logToDatabase = async (error: AppError): Promise<void> => {
  */
 const logToLocalStorage = (error: AppError): void => {
   if (!config.logToLocalStorage) return;
-  
+
   try {
     // Get existing logs
     const logsJson = localStorage.getItem('error_logs');
     const logs = logsJson ? JSON.parse(logsJson) : [];
-    
+
     // Add new log
     logs.unshift({
       ...error,
       originalError: undefined, // Don't store the original error object
     });
-    
+
     // Limit the number of logs
     if (logs.length > config.maxLocalStorageLogs) {
       logs.length = config.maxLocalStorageLogs;
     }
-    
+
     // Save logs
     localStorage.setItem('error_logs', JSON.stringify(logs));
   } catch (err) {
@@ -118,9 +104,9 @@ const logToLocalStorage = (error: AppError): void => {
  */
 const logToConsole = (error: AppError): void => {
   if (!config.logToConsole) return;
-  
+
   const { severity, category, message, code, context, timestamp, originalError } = error;
-  
+
   // Format the console output based on severity
   switch (severity) {
     case ErrorSeverity.INFO:
@@ -161,17 +147,17 @@ const logToConsole = (error: AppError): void => {
  */
 export const logError = async (error: AppError): Promise<void> => {
   if (!config.enabled) return;
-  
+
   // Log to console
   if (config.logToConsole) {
     logToConsole(error);
   }
-  
+
   // Log to local storage
   if (config.logToLocalStorage) {
     logToLocalStorage(error);
   }
-  
+
   // Log to database
   if (config.logToDatabase) {
     await logToDatabase(error);

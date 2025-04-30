@@ -1,9 +1,23 @@
-import { useEffect, useState } from "react";
-import { getSupabaseClient } from "./useAuth";
+import { useState, useEffect } from "react";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy as firestoreOrderBy,
+  limit as firestoreLimit,
+  onSnapshot,
+  QueryConstraint,
+  DocumentData
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { convertTimestamps } from "@/services/databaseService";
 
 // Hook for fetching data once
 export const useCollection = <T extends Record<string, any>>(
-  tableName: string,
+  collectionName: string,
   options?: {
     where?: [string, string, any][];
     orderBy?: [string, "asc" | "desc"];
@@ -17,61 +31,41 @@ export const useCollection = <T extends Record<string, any>>(
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const supabase = getSupabaseClient();
-        let query = supabase.from(tableName).select('*');
+        // Build query constraints
+        const constraints: QueryConstraint[] = [];
 
         // Apply where clauses
         if (options?.where) {
-          for (const [field, operator, value] of options.where) {
-            // Convert Firebase-style operators to Supabase
-            switch (operator) {
-              case '==':
-                query = query.eq(field, value);
-                break;
-              case '!=':
-                query = query.neq(field, value);
-                break;
-              case '>':
-                query = query.gt(field, value);
-                break;
-              case '>=':
-                query = query.gte(field, value);
-                break;
-              case '<':
-                query = query.lt(field, value);
-                break;
-              case '<=':
-                query = query.lte(field, value);
-                break;
-              case 'in':
-                query = query.in(field, value);
-                break;
-              case 'array-contains':
-                // This is a bit different in Supabase - using contains
-                query = query.contains(field, [value]);
-                break;
-              default:
-                console.warn(`Operator ${operator} not supported in Supabase`);
-            }
-          }
+          options.where.forEach(([field, operator, value]) => {
+            constraints.push(where(field, operator as any, value));
+          });
         }
 
         // Apply order by
         if (options?.orderBy) {
           const [field, direction] = options.orderBy;
-          query = query.order(field, { ascending: direction === 'asc' });
+          constraints.push(firestoreOrderBy(field, direction));
         }
 
         // Apply limit
         if (options?.limit) {
-          query = query.limit(options.limit);
+          constraints.push(firestoreLimit(options.limit));
         }
 
-        const { data: result, error: queryError } = await query;
+        // Create and execute query
+        const q = query(collection(db, collectionName), ...constraints);
+        const querySnapshot = await getDocs(q);
 
-        if (queryError) throw queryError;
+        // Process results
+        const results = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
 
-        setData(result as Array<T & { id: string }>);
+        // Convert any Firestore timestamps to regular dates
+        const processedResults = results.map(item => convertTimestamps(item));
+
+        setData(processedResults as Array<T & { id: string }>);
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err : new Error(String(err)));
@@ -80,14 +74,14 @@ export const useCollection = <T extends Record<string, any>>(
     };
 
     fetchData();
-  }, [tableName, options]);
+  }, [collectionName, JSON.stringify(options)]);
 
   return { data, loading, error };
 };
 
-// Hook for real-time data using Supabase subscriptions
+// Hook for real-time data
 export const useRealtimeCollection = <T extends Record<string, any>>(
-  tableName: string,
+  collectionName: string,
   options?: {
     where?: [string, string, any][];
     orderBy?: [string, "asc" | "desc"];
@@ -99,101 +93,61 @@ export const useRealtimeCollection = <T extends Record<string, any>>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
+    // Build query constraints
+    const constraints: QueryConstraint[] = [];
 
-    // First, fetch the initial data
-    const fetchInitialData = async () => {
-      try {
-        let query = supabase.from(tableName).select('*');
+    // Apply where clauses
+    if (options?.where) {
+      options.where.forEach(([field, operator, value]) => {
+        constraints.push(where(field, operator as any, value));
+      });
+    }
 
-        // Apply where clauses
-        if (options?.where) {
-          for (const [field, operator, value] of options.where) {
-            // Convert Firebase-style operators to Supabase
-            switch (operator) {
-              case '==':
-                query = query.eq(field, value);
-                break;
-              case '!=':
-                query = query.neq(field, value);
-                break;
-              case '>':
-                query = query.gt(field, value);
-                break;
-              case '>=':
-                query = query.gte(field, value);
-                break;
-              case '<':
-                query = query.lt(field, value);
-                break;
-              case '<=':
-                query = query.lte(field, value);
-                break;
-              case 'in':
-                query = query.in(field, value);
-                break;
-              case 'array-contains':
-                query = query.contains(field, [value]);
-                break;
-              default:
-                console.warn(`Operator ${operator} not supported in Supabase`);
-            }
-          }
-        }
+    // Apply order by
+    if (options?.orderBy) {
+      const [field, direction] = options.orderBy;
+      constraints.push(firestoreOrderBy(field, direction));
+    }
 
-        // Apply order by
-        if (options?.orderBy) {
-          const [field, direction] = options.orderBy;
-          query = query.order(field, { ascending: direction === 'asc' });
-        }
+    // Apply limit
+    if (options?.limit) {
+      constraints.push(firestoreLimit(options.limit));
+    }
 
-        // Apply limit
-        if (options?.limit) {
-          query = query.limit(options.limit);
-        }
+    // Create query
+    const q = query(collection(db, collectionName), ...constraints);
 
-        const { data: result, error: queryError } = await query;
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const results = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
 
-        if (queryError) throw queryError;
+        // Convert any Firestore timestamps to regular dates
+        const processedResults = results.map(item => convertTimestamps(item));
 
-        setData(result as Array<T & { id: string }>);
+        setData(processedResults as Array<T & { id: string }>);
         setLoading(false);
-      } catch (err) {
+      },
+      (err) => {
         setError(err instanceof Error ? err : new Error(String(err)));
         setLoading(false);
       }
-    };
+    );
 
-    fetchInitialData();
-
-    // Set up realtime subscription
-    const subscription = supabase
-      .channel(`${tableName}-changes`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, (payload) => {
-        // Update the data based on the change type
-        if (payload.eventType === 'INSERT') {
-          setData(prev => [...prev, payload.new as T & { id: string }]);
-        } else if (payload.eventType === 'UPDATE') {
-          setData(prev =>
-            prev.map(item => item.id === payload.new.id ? payload.new as T & { id: string } : item)
-          );
-        } else if (payload.eventType === 'DELETE') {
-          setData(prev => prev.filter(item => item.id !== payload.old.id));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [tableName, options]);
+    // Clean up listener on unmount
+    return () => unsubscribe();
+  }, [collectionName, JSON.stringify(options)]);
 
   return { data, loading, error };
 };
 
 // Hook for a single document/row
 export const useDocument = <T extends Record<string, any>>(
-  tableName: string,
+  collectionName: string,
   documentId: string,
 ) => {
   const [data, setData] = useState<T | null>(null);
@@ -201,18 +155,31 @@ export const useDocument = <T extends Record<string, any>>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDocument = async () => {
       try {
-        const supabase = getSupabaseClient();
-        const { data: result, error: queryError } = await supabase
-          .from(tableName)
-          .select('*')
-          .eq('id', documentId)
-          .single();
+        if (!documentId) {
+          setData(null);
+          setLoading(false);
+          return;
+        }
 
-        if (queryError) throw queryError;
+        const docRef = doc(db, collectionName, documentId);
+        const docSnap = await getDoc(docRef);
 
-        setData(result as T);
+        if (docSnap.exists()) {
+          const result = {
+            id: docSnap.id,
+            ...docSnap.data()
+          };
+
+          // Convert any Firestore timestamps to regular dates
+          const processedResult = convertTimestamps(result);
+
+          setData(processedResult as T);
+        } else {
+          setData(null);
+        }
+
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err : new Error(String(err)));
@@ -220,15 +187,15 @@ export const useDocument = <T extends Record<string, any>>(
       }
     };
 
-    fetchData();
-  }, [tableName, documentId]);
+    fetchDocument();
+  }, [collectionName, documentId]);
 
   return { data, loading, error };
 };
 
-// Hook for real-time document/row using Supabase subscriptions
+// Hook for real-time document/row
 export const useRealtimeDocument = <T extends Record<string, any>>(
-  tableName: string,
+  collectionName: string,
   documentId: string,
 ) => {
   const [data, setData] = useState<T | null>(null);
@@ -236,48 +203,43 @@ export const useRealtimeDocument = <T extends Record<string, any>>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
+    if (!documentId) {
+      setData(null);
+      setLoading(false);
+      return () => {};
+    }
 
-    // First, fetch the initial data
-    const fetchInitialData = async () => {
-      try {
-        const { data: result, error: queryError } = await supabase
-          .from(tableName)
-          .select('*')
-          .eq('id', documentId)
-          .single();
+    const docRef = doc(db, collectionName, documentId);
 
-        if (queryError) throw queryError;
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const result = {
+            id: docSnap.id,
+            ...docSnap.data()
+          };
 
-        setData(result as T);
+          // Convert any Firestore timestamps to regular dates
+          const processedResult = convertTimestamps(result);
+
+          setData(processedResult as T);
+        } else {
+          setData(null);
+        }
+
         setLoading(false);
-      } catch (err) {
+      },
+      (err) => {
         setError(err instanceof Error ? err : new Error(String(err)));
         setLoading(false);
       }
-    };
+    );
 
-    fetchInitialData();
-
-    // Set up realtime subscription
-    const subscription = supabase
-      .channel(`${tableName}-${documentId}`)
-      .on('postgres_changes',
-          { event: '*', schema: 'public', table: tableName, filter: `id=eq.${documentId}` },
-          (payload) => {
-            if (payload.eventType === 'UPDATE') {
-              setData(payload.new as T);
-            } else if (payload.eventType === 'DELETE') {
-              setData(null);
-            }
-          }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [tableName, documentId]);
+    // Clean up listener on unmount
+    return () => unsubscribe();
+  }, [collectionName, documentId]);
 
   return { data, loading, error };
 };

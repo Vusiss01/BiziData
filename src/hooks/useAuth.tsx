@@ -1,14 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { User as SupabaseUser, AuthError } from "@supabase/supabase-js";
-import { ensureCurrentUser } from "@/utils/userSync";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import * as authService from "@/services/authService";
 
-interface User {
+// Extend FirebaseUser with our custom properties
+interface User extends FirebaseUser {
   id: string;
-  email: string;
-  user_metadata: {
-    name?: string;
-  };
 }
 
 interface AuthContextType {
@@ -21,36 +18,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Initialize user data with timeout
-const initializeUserData = async () => {
-  try {
-    // Add a timeout to the operation
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('User data initialization timed out')), 5000)
-    );
-
-    // Use our new user synchronization utility with a timeout
-    const syncPromise = ensureCurrentUser('admin');
-
-    // Race between the actual operation and the timeout
-    const userData = await Promise.race([
-      syncPromise,
-      timeoutPromise
-    ]) as any;
-
-    if (!userData) {
-      console.error('Failed to initialize user data');
-      return;
-    }
-
-    console.log('User data initialized successfully:', userData.id);
-    return userData;
-  } catch (error) {
-    console.error('Error in initializeUserData:', error);
-    // Continue even if there's an error - don't block the auth flow
-  }
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -60,159 +27,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     console.log("Auth - Setting up auth state listener");
 
-    // Initial session check with timeout
-    const checkUser = async () => {
-      console.log("Auth - Checking initial session");
+    // Set up Firebase auth state listener
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
 
-      // Create a timeout promise
-      const timeoutPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
-          console.log("Auth - Session check timed out, continuing as not logged in");
-          setUser(null);
-          setLoading(false);
-          resolve();
-        }, 3000); // 3 second timeout
-      });
+      if (firebaseUser) {
+        console.log("Auth - User is logged in:", firebaseUser.uid);
 
-      // Create the actual check promise
-      const checkPromise = (async () => {
+        // Extend the Firebase user with our custom properties
+        const customUser = {
+          ...firebaseUser,
+          id: firebaseUser.uid,
+        } as User;
+
+        setUser(customUser);
+
+        // Ensure the user exists in Firestore
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-
-          if (session?.user) {
-            console.log("Auth - Initial session found, user is logged in");
-            const currentUser = session.user as User;
-            setUser(currentUser);
-
-            // Initialize user data to ensure the user exists in the users table
-            try {
-              await initializeUserData();
-            } catch (error) {
-              console.error("Auth - Error initializing user data:", error);
-            }
-          } else {
-            console.log("Auth - No initial session found, user is not logged in");
-            setUser(null);
-          }
+          await authService.ensureUserExists(firebaseUser);
         } catch (error) {
-          console.error("Auth - Error checking session:", error);
-          setUser(null);
-        } finally {
-          console.log("Auth - Initial session check complete");
-          setLoading(false);
+          console.error("Auth - Error ensuring user exists:", error);
         }
-      })();
-
-      // Race between the timeout and the actual check
-      await Promise.race([timeoutPromise, checkPromise]);
-    };
-
-    // Run the initial check
-    checkUser();
-
-    // Set up Supabase auth state listener with timeout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log(`Auth - Auth state changed: ${event}`);
-        setLoading(true);
-
-        // Set a timeout to ensure loading state doesn't get stuck
-        const timeoutId = setTimeout(() => {
-          console.log("Auth - Auth state change handler timed out");
-          if (session?.user) {
-            const currentUser = session.user as User;
-            setUser(currentUser);
-          } else {
-            setUser(null);
-          }
-          setLoading(false);
-        }, 3000); // 3 second timeout
-
-        // Handle the auth state change
-        (async () => {
-          try {
-            if (session?.user) {
-              console.log("Auth - User is now logged in");
-              const currentUser = session.user as User;
-              setUser(currentUser);
-
-              // Initialize user data to ensure the user exists in the users table
-              if (event === 'SIGNED_IN') {
-                try {
-                  await initializeUserData();
-                } catch (error) {
-                  console.error("Auth - Error initializing user data on sign in:", error);
-                }
-              }
-            } else {
-              console.log("Auth - User is now logged out");
-              setUser(null);
-            }
-          } catch (error) {
-            console.error("Auth - Error in auth state change handler:", error);
-          } finally {
-            console.log("Auth - Auth state change handling complete");
-            clearTimeout(timeoutId); // Clear the timeout if we complete normally
-            setLoading(false);
-          }
-        })();
+      } else {
+        console.log("Auth - No user is logged in");
+        setUser(null);
       }
-    );
 
+      setLoading(false);
+    });
+
+    // Clean up the listener on unmount
     return () => {
       console.log("Auth - Unsubscribing from auth state changes");
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Regular login
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) throw error;
-
-    // Initialize user data to ensure the user exists in the users table
-    await initializeUserData();
+    setLoading(true);
+    try {
+      const { user, error } = await authService.login(email, password);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signup = async (email: string, password: string, name: string) => {
-    const { error, data } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-        },
-      },
-    });
-
-    if (error) throw error;
-
-    // Create a record in the users table
-    if (data.user) {
-      // Use our new syncUser function to create the user record
-      const { syncUser } = await import('@/utils/userSync');
-      const userData = await syncUser(data.user.id, {
-        email: data.user.email || email,
-        name: name,
-        role: 'admin' // Set as admin by default as requested
-      });
-
-      if (!userData) {
-        console.error('Failed to create user record during signup');
-      } else {
-        console.log('User record created successfully during signup:', userData.id);
-      }
+    setLoading(true);
+    try {
+      const { user, error } = await authService.signup(email, password, name);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Signup error:", error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    setLoading(true);
+    try {
+      const { error } = await authService.logout();
+      if (error) throw error;
+    } catch (error) {
+      console.error("Logout error:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const value = {
@@ -233,6 +120,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-// Export the Supabase client for direct use
-export const getSupabaseClient = () => supabase;

@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useAuth, getSupabaseClient } from './useAuth';
+import { useAuth } from './useAuth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { convertTimestamps } from '@/services/databaseService';
+import * as authService from '@/services/authService';
 
 interface UserProfile {
   id: string;
@@ -9,15 +13,14 @@ interface UserProfile {
   phone?: string;
   address?: string;
   current_suburb?: string;
-  created_at?: string;
-  updated_at?: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export const useUserProfile = () => {
   const { user } = useAuth();
-  const supabase = getSupabaseClient();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false); // Start with false to avoid initial loading state
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -28,76 +31,46 @@ export const useUserProfile = () => {
     }
 
     console.log("Starting to fetch user profile for ID:", user.id);
-
-    // Create a default profile from auth data
-    const defaultProfile = {
-      id: user.id,
-      name: user.user_metadata?.name || "User",
-      email: user.email || "",
-      role: "admin", // Default role as requested
-    };
-
-    // Set loading state
     setLoading(true);
 
     // Function to fetch or create user profile
     const fetchOrCreateProfile = async () => {
       try {
-        console.log("Querying users table for ID:", user.id);
+        // Get user profile from Firestore
+        const { profile: userProfile, error: profileError } = await authService.getUserProfile(user.id);
 
-        // Try direct query to the users table
-        const { data: userData, error: userError } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", user.id)
-          .single();
+        if (profileError) {
+          throw profileError;
+        }
 
-        if (userError) {
-          console.error("Error querying users table:", userError);
-
-          // If the user doesn't exist in the database, create them
-          if (userError.code === 'PGRST116') { // Record not found
-            console.log("User not found in database, creating user record...");
-
-            // Create user record
-            const { error: insertError } = await supabase
-              .from("users")
-              .insert({
-                id: user.id,
-                email: user.email || "",
-                name: user.user_metadata?.name || "User",
-                role: "admin", // Default role as requested
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
-
-            if (insertError) {
-              console.error("Error creating user record:", insertError);
-              // Use default profile on error
-              setProfile(defaultProfile);
-            } else {
-              console.log("Successfully created user record");
-              // Use the default profile since we just created it
-              setProfile(defaultProfile);
-            }
-          } else {
-            // For other errors, use default profile
-            console.log("Using default profile due to query error");
-            setProfile(defaultProfile);
-          }
-        } else if (userData) {
-          // User found in database
-          console.log("User found in database:", userData);
-          setProfile(userData);
+        if (userProfile) {
+          // Convert timestamps and set profile
+          const processedProfile = convertTimestamps(userProfile) as UserProfile;
+          setProfile(processedProfile);
         } else {
-          // If no data returned but no error either (unlikely)
-          console.log("No user data returned, using default profile");
+          // Create a default profile from auth data
+          const defaultProfile: UserProfile = {
+            id: user.id,
+            name: user.displayName || "User",
+            email: user.email || "",
+            role: "admin", // Default role as requested
+          };
+
+          // Ensure user exists in Firestore
+          await authService.ensureUserExists(user, 'admin');
           setProfile(defaultProfile);
         }
       } catch (err) {
         console.error("Exception in useUserProfile:", err);
         setError(err instanceof Error ? err : new Error('Unknown error'));
-        // Use default profile on error
+
+        // Create a default profile on error
+        const defaultProfile: UserProfile = {
+          id: user.id,
+          name: user.displayName || "User",
+          email: user.email || "",
+          role: "admin", // Default role as requested
+        };
         setProfile(defaultProfile);
       } finally {
         console.log("Profile fetch completed, setting loading to false");
