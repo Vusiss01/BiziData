@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import * as authService from "@/services/authService";
+import { supabase } from "@/lib/supabase";
 
 // Extend FirebaseUser with our custom properties
 interface User extends FirebaseUser {
@@ -119,4 +120,11 @@ export const useAuth = () => {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+};
+
+// This function is provided for backward compatibility during migration
+// It returns the mock Supabase client that logs warnings when used
+export const getSupabaseClient = () => {
+  console.warn('getSupabaseClient() is deprecated. Please use Firebase services instead.');
+  return supabase;
 };

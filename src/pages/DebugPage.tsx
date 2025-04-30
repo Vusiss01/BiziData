@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import UserSyncStatus from '@/components/debug/UserSyncStatus';
 import ErrorLogsViewer from '@/components/debug/ErrorLogsViewer';
-import { runSupabaseDiagnostics } from '@/utils/diagnostics';
+import { runFirebaseDiagnostics } from '@/utils/diagnostics';
 import { useAuth } from '@/hooks/useAuth';
 import useErrorHandler from '@/hooks/useErrorHandler';
 import { ErrorCategory } from '@/utils/errorHandler';
@@ -29,7 +29,7 @@ const DebugPage = () => {
   const runDiagnostics = async () => {
     await handleAsync(
       async () => {
-        const results = await runSupabaseDiagnostics();
+        const results = await runFirebaseDiagnostics();
         setDiagnostics(results);
         return results;
       },
@@ -65,7 +65,7 @@ const DebugPage = () => {
             <CardHeader>
               <CardTitle>System Diagnostics</CardTitle>
               <CardDescription>
-                Run diagnostics to check the health of your Supabase connection and permissions
+                Run diagnostics to check the health of your Firebase connection and permissions
               </CardDescription>
             </CardHeader>
             <CardContent>

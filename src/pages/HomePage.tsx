@@ -15,8 +15,8 @@ import {
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import CreateProjectModal from "@/components/projects/CreateProjectModal";
 import DemoNotice from "@/components/common/DemoNotice";
-import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
-import SupabaseConnectionTest from "@/components/SupabaseConnectionTest";
+import { useAuth } from "@/hooks/useAuth";
+import FirebaseConnectionTest from "@/components/FirebaseConnectionTest";
 import HomeMetrics from "@/components/dashboard/HomeMetrics";
 import PopularDataModelsList from "@/components/dashboard/PopularDataModelsList";
 import RecentShopsList from "@/components/dashboard/RecentShopsList";
@@ -33,7 +33,7 @@ const queryClient = new QueryClient({
 });
 
 // API Documentation URL
-const API_DOCS_URL = "https://supabase.com/docs/reference";
+const API_DOCS_URL = "https://firebase.google.com/docs";
 
 const HomePage = () => {
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -57,8 +57,8 @@ const HomePage = () => {
           <DemoNotice onClose={() => setShowDemoNotice(false)} />
         )}
 
-        {/* Supabase Connection Test */}
-        <SupabaseConnectionTest />
+        {/* Firebase Connection Test */}
+        <FirebaseConnectionTest />
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">FoodBase Dashboard</h1>
           <div className="flex items-center gap-2">

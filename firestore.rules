@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function isDriver() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
+    }
+
+    function isOwnerOf(resourceId) {
+      return isAuthenticated() &&
+        resource.data.owner_id == request.auth.uid;
+    }
+
+    function isCurrentUser(userId) {
+      return isAuthenticated() &&
+        request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Anyone can read user profiles
+      allow read: if isAuthenticated();
+
+      // Users can only write to their own profile, admins can write to any profile
+      allow write: if isCurrentUser(userId) || isAdmin();
+    }
+
+    // Restaurants collection
+    match /restaurants/{restaurantId} {
+      // Anyone can read restaurant data
+      allow read: if isAuthenticated();
+
+      // Only admins and restaurant owners can create/update restaurants
+      allow create: if isAdmin() || isOwner();
+
+      // Only admins and the restaurant owner can update/delete
+      allow update, delete: if isAdmin() || isOwnerOf(restaurantId);
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      // Authenticated users can read their own orders
+      // Restaurant owners can read orders for their restaurants
+      // Drivers can read orders assigned to them
+      // Admins can read all orders
+      allow read: if isAdmin() ||
+                    (isAuthenticated() && resource.data.user_id == request.auth.uid) ||
+                    (isOwner() && resource.data.restaurant_id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurant_ids) ||
+                    (isDriver() && resource.data.driver_id == request.auth.uid);
+
+      // Authenticated users can create orders
+      allow create: if isAuthenticated();
+
+      // Only admins, the order owner, or assigned drivers can update orders
+      allow update: if isAdmin() ||
+                      (isAuthenticated() && resource.data.user_id == request.auth.uid) ||
+                      (isDriver() && resource.data.driver_id == request.auth.uid);
+
+      // Only admins can delete orders
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
