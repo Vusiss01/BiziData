@@ -76,6 +76,7 @@ const UserManagementPage = () => {
     await handleAsync(
       async () => {
         let result;
+        console.log(`Fetching users for tab: ${activeTab}`);
 
         const options = {
           search: debouncedSearchQuery || undefined,
@@ -83,27 +84,37 @@ const UserManagementPage = () => {
           orderDirection: 'desc' as 'asc' | 'desc',
         };
 
-        switch (activeTab) {
-          case 'owners':
-            result = await getUsersByRole('owner', options);
-            break;
-          case 'drivers':
-            result = await getUsersByRole('driver', options);
-            break;
-          case 'admins':
-            result = await getUsersByRole('admin', options);
-            break;
-          default:
-            result = await getUsers(options);
-            break;
-        }
+        try {
+          switch (activeTab) {
+            case 'owners':
+              result = await getUsersByRole('owner', options);
+              break;
+            case 'drivers':
+              result = await getUsersByRole('driver', options);
+              break;
+            case 'admins':
+              result = await getUsersByRole('admin', options);
+              break;
+            default:
+              result = await getUsers(options);
+              break;
+          }
 
-        if (result.error) {
-          throw result.error;
-        }
+          console.log(`Fetch result:`, result);
 
-        setUsers(result.data || []);
-        return result.data;
+          if (result.error) {
+            console.error(`Error in fetch result:`, result.error);
+            throw result.error;
+          }
+
+          // Even if there's an error, we might have fallback data
+          setUsers(result.data || []);
+          return result.data;
+        } catch (error) {
+          console.error(`Error fetching users:`, error);
+          // Let the error handler deal with it
+          throw error;
+        }
       },
       {
         action: 'fetchUsers',

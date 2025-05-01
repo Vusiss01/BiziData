@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, RefreshCw, XCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw, XCircle, Loader2 } from 'lucide-react';
 
 interface ErrorDisplayProps {
   error: string | null;
@@ -71,19 +71,46 @@ const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
             </Button>
           )}
           {onRetry && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRetry}
-              className="h-8 px-2 text-xs flex items-center"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Try Again
-            </Button>
+            <RetryButton onRetry={onRetry} />
           )}
         </div>
       </div>
     </Alert>
+  );
+};
+
+/**
+ * Retry button component with loading state
+ */
+const RetryButton: React.FC<{ onRetry: () => void }> = ({ onRetry }) => {
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    try {
+      await onRetry();
+    } catch (error) {
+      console.error('Error during retry:', error);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleRetry}
+      disabled={isRetrying}
+      className="h-8 px-2 text-xs flex items-center"
+    >
+      {isRetrying ? (
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+      ) : (
+        <RefreshCw className="h-3 w-3 mr-1" />
+      )}
+      {isRetrying ? 'Retrying...' : 'Try Again'}
+    </Button>
   );
 };
 

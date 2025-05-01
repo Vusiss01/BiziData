@@ -5,11 +5,30 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Star, Clock, AlertCircle } from "lucide-react";
+import { MapPin, Star, Clock, AlertCircle, User, Calendar, Utensils } from "lucide-react";
 import useErrorHandler from "@/hooks/useErrorHandler";
 import ErrorDisplay from "@/components/common/ErrorDisplay";
 import { ErrorCategory } from "@/utils/errorHandler";
 import { getStatusColor, formatStatus } from "@/utils/uiUtils";
+
+// Helper function to format dates
+const formatDate = (date: Date | string | null | undefined): string => {
+  if (!date) return 'Unknown';
+
+  try {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return dateObj.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return String(date);
+  }
+};
 
 interface RestaurantListProps {
   limit?: number;
@@ -43,25 +62,29 @@ const RestaurantList: React.FC<RestaurantListProps> = ({
   const fetchRestaurants = async () => {
     await handleAsync(
       async () => {
-        const options: RestaurantFilterOptions = {
-          limit,
-          status: statusFilter,
-        };
+        // Prepare options based on filters
+        const options: RestaurantFilterOptions = {};
 
         if (showOwnerOnly && user) {
-          options.owner_id = user.id;
+          options.ownerId = user.id;
         }
 
-        if (searchQuery) {
-          options.search = searchQuery;
+        if (statusFilter) {
+          options.status = statusFilter;
         }
 
-        const { data, error, count } = await getRestaurants(options);
+        if (limit) {
+          options.limit = limit;
+        }
+
+        // Fetch restaurants
+        const { data, error } = await getRestaurants(options);
 
         if (error) {
           throw error;
         }
 
+        // Update state with fetched restaurants
         setRestaurants(data || []);
         return data;
       },
@@ -143,70 +166,70 @@ const RestaurantList: React.FC<RestaurantListProps> = ({
 
   return (
     <div className="space-y-4">
-      {restaurants.map((restaurant) => {
-        // Get the first location if available
-        const location = restaurant.restaurant_locations?.[0];
+      {restaurants.map((restaurant) => (
+        <Card
+          key={restaurant.id}
+          className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => handleRestaurantClick(restaurant.id)}
+        >
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle>{restaurant.name || 'Unnamed Restaurant'}</CardTitle>
+                <CardDescription className="flex items-center mt-1">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {restaurant.address || `ID: ${restaurant.id}`}
+                </CardDescription>
+              </div>
+              <StatusBadge status={restaurant.status || 'unknown'} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col space-y-2 text-sm text-gray-500">
+              <div className="flex items-center">
+                <User className="h-4 w-4 mr-2" />
+                <span>Owner: {restaurant.owner_name || restaurant.owner_id || 'Not assigned'}</span>
+              </div>
 
-        return (
-          <Card
-            key={restaurant.id}
-            className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => handleRestaurantClick(restaurant.id)}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>{restaurant.name}</CardTitle>
-                  {location && (
-                    <CardDescription className="flex items-center mt-1">
-                      <MapPin className="h-3 w-3 mr-1" />
-                      {location.street}, {location.suburb}, {location.city}
-                    </CardDescription>
-                  )}
+              {restaurant.created_at && (
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <span>Created: {formatDate(restaurant.created_at)}</span>
                 </div>
-                <StatusBadge status={restaurant.status} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                {restaurant.rating && (
-                  <div className="flex items-center">
-                    <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                    <span>{restaurant.rating.toFixed(1)}</span>
-                  </div>
-                )}
+              )}
 
-                {location && (
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-1" />
-                    <span>{location.status === 'open' ? 'Open' : 'Closed'}</span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRestaurantClick(restaurant.id);
-                }}
-              >
-                View Details
-              </Button>
-            </CardFooter>
-          </Card>
-        );
-      })}
+              {restaurant.cuisine && (
+                <div className="flex items-center">
+                  <Utensils className="h-4 w-4 mr-2" />
+                  <span>Cuisine: {restaurant.cuisine}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRestaurantClick(restaurant.id);
+              }}
+            >
+              View Details
+            </Button>
+          </CardFooter>
+        </Card>
+      ))}
     </div>
   );
 };
 
 // Helper component for status badge
 const StatusBadge = ({ status }: { status: string }) => {
-  const colorClass = getStatusColor(status);
-  const formattedStatus = formatStatus(status);
+  // Default to 'unknown' if status is not provided
+  const safeStatus = status || 'unknown';
+  const colorClass = getStatusColor(safeStatus);
+  const formattedStatus = formatStatus(safeStatus);
 
   return <Badge className={colorClass}>{formattedStatus}</Badge>;
 };

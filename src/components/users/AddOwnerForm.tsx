@@ -99,38 +99,132 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
       return;
     }
 
+    // Password validation
+    if (formData.password.length < 8) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 8 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Use our handleAsync utility for better error handling
     await handleAsync(
       async () => {
-        // Create user with owner role
-        const result = await createUser({
+        console.log("Creating restaurant owner with data:", {
           ...formData,
           role: 'owner',
-          profileImage,
+          hasProfileImage: !!profileImage
         });
 
-        if (result.error) {
-          throw result.error;
+        try {
+          // Create user with owner role - ensure it's exactly "owner" to match what we're querying for
+          console.log("Creating user with role 'owner'");
+          const result = await createUser({
+            ...formData,
+            role: 'owner', // This must match exactly what we query for in getRestaurantOwners
+            profileImage,
+          });
+
+          // Handle partial success (user created in auth but not in Firestore)
+          if (result.error && result.user) {
+            console.warn("Partial success creating restaurant owner:", result.error);
+
+            toast({
+              title: "Partial Success",
+              description: `Restaurant owner "${result.user.name}" created with limited functionality. Some features may not work properly.`,
+              variant: "default",
+            });
+
+            // Still consider this a success for the UI flow
+            if (onSuccess) {
+              onSuccess();
+            }
+
+            // Close the dialog
+            onClose();
+            return result;
+          }
+
+          // Handle complete failure
+          if (result.error) {
+            console.error("Error creating restaurant owner:", result.error);
+            throw result.error;
+          }
+
+          if (!result.user) {
+            console.error("No user returned from createUser");
+            throw new Error("Failed to create restaurant owner");
+          }
+
+          // Handle mock user in development
+          if (result.user.isMockUser) {
+            console.warn("Created mock restaurant owner for development:", result.user);
+
+            toast({
+              title: "Development Mode",
+              description: `Mock restaurant owner "${result.user.name}" created for testing purposes.`,
+              variant: "default",
+            });
+
+            if (onSuccess) {
+              onSuccess();
+            }
+
+            onClose();
+            return result;
+          }
+
+          // Handle complete success
+          console.log("Restaurant owner created successfully:", result.user);
+
+          toast({
+            title: "Success",
+            description: `Restaurant owner "${result.user.name}" created successfully`,
+          });
+
+          // Call success callback
+          if (onSuccess) {
+            onSuccess();
+          }
+
+          // Close the dialog
+          onClose();
+          return result;
+        } catch (error: any) {
+          console.error("Error in restaurant owner creation:", error);
+
+          // Provide more user-friendly error messages
+          let userMessage = "Failed to create restaurant owner. Please try again.";
+
+          if (error.message) {
+            if (error.message.includes("email-already-in-use") ||
+                error.message.includes("already in use")) {
+              userMessage = "This email address is already in use. Please use a different email.";
+            } else if (error.message.includes("invalid-email")) {
+              userMessage = "The email address is not valid.";
+            } else if (error.message.includes("weak-password")) {
+              userMessage = "The password is too weak. Please use a stronger password.";
+            } else if (error.message.includes("permission-denied") ||
+                      error.message.includes("insufficient permissions")) {
+              userMessage = "You don't have permission to create restaurant owners. Please contact an administrator.";
+            }
+          }
+
+          throw new Error(userMessage);
         }
-
-        if (!result.user) {
-          throw new Error("Failed to create restaurant owner");
-        }
-
-        toast({
-          title: "Success",
-          description: `Restaurant owner "${result.user.name}" created successfully`,
-        });
-
-        // Call success callback
-        if (onSuccess) {
-          onSuccess();
-        }
-
-        // Close form
-        onClose();
-
-        return result;
       },
       {
         action: 'createUser',

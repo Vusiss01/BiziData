@@ -76,7 +76,13 @@ const EnhancedRestaurantsPage = () => {
       title: "Success",
       description: "Restaurant created successfully",
     });
+
+    // Force refresh of restaurant list by incrementing the key
+    console.log('Refreshing restaurant list after creation');
     setRefreshKey(prev => prev + 1);
+
+    // Close the dialog
+    setIsAddDialogOpen(false);
   };
 
   const handleRestaurantClick = (restaurantId: string) => {

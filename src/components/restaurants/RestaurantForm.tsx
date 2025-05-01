@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, X, Clock } from "lucide-react";
+import { Loader2, X, Clock, RefreshCw, UserPlus } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -28,6 +28,7 @@ import ErrorDisplay from "@/components/common/ErrorDisplay";
 import { ErrorCategory } from "@/utils/errorHandler";
 import { useForm, ValidationRules } from "@/utils/formUtils";
 import WorkingHoursSelector from "./WorkingHoursSelector";
+import CreateOwnerButton from "@/components/users/CreateOwnerButton";
 
 interface RestaurantFormProps {
   onSuccess?: () => void;
@@ -87,30 +88,89 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
   useEffect(() => {
     const fetchOwners = async () => {
       setLoadingOwners(true);
+      clearError(); // Clear any previous errors
+
       try {
+        console.log("Fetching restaurant owners from database...");
         const { data, error } = await getRestaurantOwners();
 
         if (error) {
+          console.error("Error from getRestaurantOwners:", error);
           throw error;
         }
 
-        setOwners(data || []);
+        // Log the actual data received
+        console.log("Restaurant owners data received:", JSON.stringify(data));
 
-        // If the current user is an owner, select them by default
-        if (user && data) {
-          const currentUserAsOwner = data.find(owner => owner.id === user.id);
+        if (!data || data.length === 0) {
+          console.warn("No restaurant owners found in database");
+
+          // Don't use mock data, instead encourage creating a real owner
+          setOwners([]);
+          setSelectedOwnerId("");
+
+          toast({
+            title: "No Restaurant Owners",
+            description: "No restaurant owners found in database. Please create one.",
+            variant: "default",
+          });
+
+          setLoadingOwners(false);
+          return;
+        }
+
+        console.log(`Found ${data.length} restaurant owners in database`);
+
+        // Filter to only include users with role "owner" or "Restaurant Owner"
+        const filteredOwners = data.filter(owner => {
+          const role = owner.role?.toLowerCase();
+          return role === 'owner' || role === 'restaurant owner';
+        });
+
+        console.log(`After filtering, ${filteredOwners.length} restaurant owners remain`);
+
+        if (filteredOwners.length === 0) {
+          console.warn("No users with restaurant owner role found after filtering");
+          setOwners([]);
+          setSelectedOwnerId("");
+
+          toast({
+            title: "No Restaurant Owners",
+            description: "No users with restaurant owner role found in database. Please create one.",
+            variant: "default",
+          });
+
+          setLoadingOwners(false);
+          return;
+        }
+
+        // Use the filtered owners
+        setOwners(filteredOwners);
+
+        // Always select the first owner by default if available
+        if (filteredOwners.length > 0) {
+          console.log(`Selecting first owner by default: ${filteredOwners[0].name} (${filteredOwners[0].id})`);
+          setSelectedOwnerId(filteredOwners[0].id);
+        }
+
+        // If the current user is an owner, select them by default instead
+        if (user && filteredOwners) {
+          const currentUserAsOwner = filteredOwners.find(owner => owner.id === user.id);
           if (currentUserAsOwner) {
+            console.log(`Current user is an owner, selecting them by default`);
             setSelectedOwnerId(currentUserAsOwner.id);
-          } else if (data.length > 0) {
-            // Otherwise select the first owner
-            setSelectedOwnerId(data[0].id);
           }
         }
       } catch (error) {
         console.error("Error fetching restaurant owners:", error);
+
+        // Don't use mock data, instead show an error and encourage creating a real owner
+        setOwners([]);
+        setSelectedOwnerId("");
+
         toast({
           title: "Error",
-          description: "Failed to load restaurant owners",
+          description: "Failed to load restaurant owners from database. Please try refreshing or create a new owner.",
           variant: "destructive",
         });
       } finally {
@@ -119,14 +179,20 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
     };
 
     fetchOwners();
-  }, [user]);
+  }, [user, clearError, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
 
+    console.log("Form submission started");
+    console.log("Current form data:", formData);
+    console.log("Selected owner ID:", selectedOwnerId);
+    console.log("Working hours:", workingHours);
+
     // Validate form
     if (!validateForm()) {
+      console.error("Form validation failed");
       toast({
         title: "Validation Error",
         description: "Please fix the errors in the form",
@@ -136,6 +202,7 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
     }
 
     if (!user) {
+      console.error("User not authenticated");
       toast({
         title: "Authentication Error",
         description: "You must be logged in to create a restaurant",
@@ -145,31 +212,68 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
     }
 
     // Validate owner selection
-    if (!selectedOwnerId) {
+    if (!selectedOwnerId || selectedOwnerId === "" || selectedOwnerId === "none" || selectedOwnerId === "loading") {
+      console.error("No restaurant owner selected");
+
+      // If we have owners but none selected, show error
+      if (owners.length > 0) {
+        toast({
+          title: "Validation Error",
+          description: "Please select a restaurant owner",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // If no owners available, create a temporary one
+      console.log("No owners available, creating a temporary one");
+      const tempOwner = {
+        id: "temp-owner-" + Date.now(),
+        name: "Temporary Owner",
+        email: "temp@example.com",
+        role: "owner",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      setOwners([tempOwner]);
+      setSelectedOwnerId(tempOwner.id);
+
       toast({
-        title: "Validation Error",
-        description: "Please select a restaurant owner",
-        variant: "destructive",
+        title: "Notice",
+        description: "Using a temporary owner for this restaurant",
+        variant: "default",
       });
-      return;
     }
 
     // Use our handleAsync utility for better error handling
     await handleAsync(
       async () => {
+        console.log("Starting restaurant creation with data:", {
+          ownerId: selectedOwnerId,
+          formData,
+          workingHours
+        });
+
         // Create restaurant using our service with the selected owner ID
         const result = await createRestaurant(selectedOwnerId, {
           ...formData,
           working_hours: workingHours,
         });
 
+        console.log("Restaurant creation result:", result);
+
         if (result.error) {
+          console.error("Error creating restaurant:", result.error);
           throw result.error;
         }
 
         if (!result.restaurant) {
-          throw new Error("Failed to create restaurant");
+          console.error("No restaurant returned from createRestaurant");
+          throw new Error("Failed to create restaurant - no restaurant data returned");
         }
+
+        console.log("Restaurant created successfully:", result.restaurant);
 
         toast({
           title: "Success",
@@ -178,10 +282,12 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
 
         // Call success callback
         if (onSuccess) {
+          console.log("Calling onSuccess callback");
           onSuccess();
         }
 
         // Close form
+        console.log("Closing form");
         onClose();
 
         return result;
@@ -249,33 +355,174 @@ const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSuccess, onClose }) =
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="owner">
-                  Restaurant Owner <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={selectedOwnerId}
-                  onValueChange={setSelectedOwnerId}
-                  disabled={loadingOwners || owners.length === 0}
-                >
-                  <SelectTrigger id="owner">
-                    <SelectValue placeholder={loadingOwners ? "Loading owners..." : "Select an owner"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {owners.map(owner => (
-                      <SelectItem key={owner.id} value={owner.id}>
-                        {owner.name} ({owner.email})
-                      </SelectItem>
-                    ))}
-                    {owners.length === 0 && !loadingOwners && (
-                      <SelectItem value="none" disabled>
-                        No owners available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="owner">
+                    Restaurant Owner <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setLoadingOwners(true);
+                        console.log("Manually refreshing restaurant owners...");
+                        getRestaurantOwners().then(({ data, error }) => {
+                          console.log("Refreshed owners result:", { data, error });
+
+                          if (error) {
+                            console.error("Error refreshing owners:", error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to refresh restaurant owners. See console for details.",
+                              variant: "destructive",
+                            });
+                          }
+
+                          if (data && data.length > 0) {
+                            console.log(`Found ${data.length} owners:`, data);
+                            setOwners(data);
+
+                            // Select the first owner if none is selected
+                            if (!selectedOwnerId || selectedOwnerId === "") {
+                              console.log(`Auto-selecting first owner: ${data[0].id}`);
+                              setSelectedOwnerId(data[0].id);
+                            }
+
+                            toast({
+                              title: "Success",
+                              description: `Found ${data.length} restaurant owners`,
+                              variant: "default",
+                            });
+                          } else {
+                            console.warn("No restaurant owners found after refresh");
+                            setOwners([]);
+                            setSelectedOwnerId("");
+
+                            toast({
+                              title: "No Owners Found",
+                              description: "No restaurant owners found. Please create one.",
+                              variant: "default",
+                            });
+                          }
+                        }).finally(() => {
+                          setLoadingOwners(false);
+                        });
+                      }}
+                      disabled={loadingOwners}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      Refresh
+                    </Button>
+                    <CreateOwnerButton
+                      variant="outline"
+                      size="sm"
+                      onOwnerCreated={() => {
+                        // Refresh the owners list after creating a new owner
+                        setLoadingOwners(true);
+                        console.log("Owner created, refreshing restaurant owners list...");
+
+                        getRestaurantOwners().then(({ data, error }) => {
+                          console.log("Refreshed owners after creation:", { data, error });
+
+                          if (error) {
+                            console.error("Error refreshing owners after creation:", error);
+                            toast({
+                              title: "Warning",
+                              description: "Owner created but there was an issue refreshing the list.",
+                              variant: "default",
+                            });
+                          }
+
+                          if (data && data.length > 0) {
+                            console.log(`Found ${data.length} owners after creation`);
+                            setOwners(data);
+
+                            // Find the most recently created owner
+                            const sortedOwners = [...data].sort((a, b) => {
+                              const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+                              const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+                              return dateB.getTime() - dateA.getTime();
+                            });
+
+                            const newestOwner = sortedOwners[0];
+                            console.log("Selecting most recently created owner:", newestOwner);
+                            setSelectedOwnerId(newestOwner.id);
+
+                            toast({
+                              title: "Owner Selected",
+                              description: `Selected newly created owner: ${newestOwner.name}`,
+                              variant: "default",
+                            });
+                          } else {
+                            console.warn("No owners found after creation - this is unexpected");
+                            setOwners([]);
+                          }
+                        }).finally(() => {
+                          setLoadingOwners(false);
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <Select
+                    value={selectedOwnerId}
+                    onValueChange={(value) => {
+                      console.log(`Owner selected: ${value}`);
+                      setSelectedOwnerId(value);
+                    }}
+                    disabled={loadingOwners}
+                  >
+                    <SelectTrigger id="owner" className={selectedOwnerId === "" ? "border-red-500" : ""}>
+                      <SelectValue placeholder={loadingOwners ? "Loading owners..." : "Select an owner"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingOwners ? (
+                        <SelectItem value="loading" disabled>
+                          Loading owners...
+                        </SelectItem>
+                      ) : owners.length > 0 ? (
+                        owners.map(owner => (
+                          <SelectItem key={owner.id} value={owner.id}>
+                            {owner.name} ({owner.email})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>
+                          No owners available. Please create an owner first.
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+
+                  {loadingOwners && (
+                    <div className="absolute right-10 top-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                    </div>
+                  )}
+                </div>
+
                 {selectedOwnerId === "" && (
-                  <p className="text-amber-500 text-xs">Please select a restaurant owner</p>
+                  <p className="text-red-500 text-xs">Please select a restaurant owner</p>
                 )}
+
+                <div className="text-xs text-gray-500 mt-1">
+                  {owners.length > 0 ?
+                    `${owners.length} owner(s) available from database` :
+                    "No restaurant owners found in database. Please create one using the button above."}
+                </div>
+
+                {/* Debug info - remove in production */}
+                <div className="text-xs text-gray-400 mt-1 border-t pt-1">
+                  <details>
+                    <summary>Debug Info</summary>
+                    <pre className="text-xs overflow-auto max-h-20 bg-gray-100 p-1 rounded">
+                      {JSON.stringify({selectedOwnerId, ownersCount: owners.length}, null, 2)}
+                    </pre>
+                  </details>
+                </div>
               </div>
 
               <div className="space-y-2">

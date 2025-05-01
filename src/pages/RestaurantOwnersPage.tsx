@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import AddOwnerForm from "@/components/users/AddOwnerForm";
-import { useAuth, getSupabaseClient } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
+import { getRestaurantOwners } from "@/services/userService";
+import { getRestaurantsByOwnerId } from "@/services/restaurantService";
+import useErrorHandler from "@/hooks/useErrorHandler";
+import { ErrorCategory } from "@/utils/errorHandler";
 import {
   Table,
   TableBody,
@@ -20,52 +24,116 @@ const RestaurantOwnersPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [owners, setOwners] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const supabase = getSupabaseClient();
+
+  // Use our custom error handler
+  const {
+    error: fetchError,
+    isLoading: loading,
+    handleAsync,
+    clearError
+  } = useErrorHandler({
+    component: 'RestaurantOwnersPage',
+    showToast: true,
+  });
+
+  // Function to fetch restaurant owners
+  const fetchOwners = async () => {
+    if (!user) return;
+
+    await handleAsync(
+      async () => {
+        console.log("Fetching restaurant owners...");
+
+        try {
+          // Fetch users with owner role
+          const { data: owners, error } = await getRestaurantOwners();
+
+          if (error) {
+            console.error("Error fetching restaurant owners:", error);
+
+            // If in development, use mock data
+            if (process.env.NODE_ENV === 'development') {
+              console.log("Using mock owners data due to error");
+              setOwners(mockOwners);
+              return mockOwners;
+            }
+
+            throw error;
+          }
+
+          if (!owners || owners.length === 0) {
+            console.log("No restaurant owners found, using mock data");
+            setOwners(mockOwners);
+            return mockOwners;
+          }
+
+          console.log(`Found ${owners.length} restaurant owners, fetching their restaurants...`);
+
+          // Fetch restaurants for each owner
+          const ownersWithRestaurants = await Promise.all(
+            owners.map(async (owner) => {
+              try {
+                console.log(`Fetching restaurants for owner ${owner.id} (${owner.name})`);
+                const { data: restaurants, error: restaurantError } = await getRestaurantsByOwnerId(owner.id);
+
+                if (restaurantError) {
+                  console.warn(`Error fetching restaurants for owner ${owner.id}:`, restaurantError);
+                }
+
+                // Determine status based on user data or default to verified
+                const status = owner.status || (owner.is_verified ? 'verified' : 'pending');
+
+                return {
+                  ...owner,
+                  restaurants: restaurants?.map(r => r.name) || [],
+                  status: status,
+                  joinDate: owner.created_at
+                    ? new Date(owner.created_at).toISOString().split('T')[0]
+                    : 'Unknown'
+                };
+              } catch (error) {
+                console.error(`Error processing restaurants for owner ${owner.id}:`, error);
+                return {
+                  ...owner,
+                  restaurants: [],
+                  status: owner.status || 'verified',
+                  joinDate: owner.created_at
+                    ? new Date(owner.created_at).toISOString().split('T')[0]
+                    : 'Unknown'
+                };
+              }
+            })
+          );
+
+          console.log("Successfully processed all restaurant owners with their restaurants");
+          setOwners(ownersWithRestaurants);
+          return ownersWithRestaurants;
+        } catch (error) {
+          console.error("Error in fetchOwners:", error);
+
+          // In development, always fall back to mock data
+          if (process.env.NODE_ENV === 'development') {
+            console.log("Using mock owners data due to error");
+            setOwners(mockOwners);
+            return mockOwners;
+          }
+
+          throw error;
+        }
+      },
+      {
+        action: 'fetchOwners',
+        category: ErrorCategory.DATABASE,
+        userMessage: "Failed to fetch restaurant owners. Please try again.",
+      }
+    );
+  };
 
   // Fetch restaurant owners from the database
   useEffect(() => {
-    const fetchOwners = async () => {
-      if (!user) return;
-
-      setLoading(true);
-      try {
-        // Fetch users with restaurant_owner role
-        const { data, error } = await supabase
-          .from('users')
-          .select('id, name, email, role, is_verified, created_at')
-          .eq('role', 'restaurant_owner');
-
-        if (error) throw error;
-
-        // Fetch restaurants for each owner
-        const ownersWithRestaurants = await Promise.all(
-          (data || []).map(async (owner) => {
-            const { data: restaurants, error: restaurantError } = await supabase
-              .from('restaurants')
-              .select('name')
-              .eq('owner_id', owner.id);
-
-            return {
-              ...owner,
-              restaurants: restaurants?.map(r => r.name) || [],
-              status: owner.is_verified ? 'verified' : 'pending',
-              joinDate: new Date(owner.created_at).toISOString().split('T')[0]
-            };
-          })
-        );
-
-        setOwners(ownersWithRestaurants);
-      } catch (error) {
-        console.error('Error fetching restaurant owners:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOwners();
-  }, [user, supabase]);
+  }, [user]);
 
   // Fallback mock data if no owners found
   const mockOwners = [
@@ -104,8 +172,10 @@ const RestaurantOwnersPage = () => {
   ];
 
   // Use mock data if no owners found and not loading
+  // This is now handled in the fetchOwners function
   useEffect(() => {
-    if (!loading && owners.length === 0) {
+    if (!loading && owners.length === 0 && process.env.NODE_ENV === 'development') {
+      console.log("No owners found after loading, using mock data");
       setOwners(mockOwners);
     }
   }, [loading]);
@@ -211,39 +281,6 @@ const RestaurantOwnersPage = () => {
             onClose={() => setIsAddDialogOpen(false)}
             onSuccess={() => {
               // Refresh the owners list
-              const fetchOwners = async () => {
-                if (!user) return;
-
-                try {
-                  const { data, error } = await supabase
-                    .from('users')
-                    .select('id, name, email, role, is_verified, created_at')
-                    .eq('role', 'restaurant_owner');
-
-                  if (error) throw error;
-
-                  const ownersWithRestaurants = await Promise.all(
-                    (data || []).map(async (owner) => {
-                      const { data: restaurants, error: restaurantError } = await supabase
-                        .from('restaurants')
-                        .select('name')
-                        .eq('owner_id', owner.id);
-
-                      return {
-                        ...owner,
-                        restaurants: restaurants?.map(r => r.name) || [],
-                        status: owner.is_verified ? 'verified' : 'pending',
-                        joinDate: new Date(owner.created_at).toISOString().split('T')[0]
-                      };
-                    })
-                  );
-
-                  setOwners(ownersWithRestaurants);
-                } catch (error) {
-                  console.error('Error refreshing restaurant owners:', error);
-                }
-              };
-
               fetchOwners();
             }}
           />

@@ -35,16 +35,42 @@ const WorkingHoursSelector: React.FC<WorkingHoursSelectorProps> = ({
   // Initialize with default hours if empty
   React.useEffect(() => {
     if (!value || value.length === 0) {
+      console.log("Initializing with default working hours");
       onChange(DEFAULT_HOURS);
+    } else {
+      console.log("Using provided working hours:", value);
     }
   }, []);
 
+  // Validate time format (HH:MM)
+  const validateTimeFormat = (time: string): string => {
+    // If time is empty, return default
+    if (!time) return '09:00';
+
+    // Check if time matches HH:MM format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!timeRegex.test(time)) {
+      console.warn(`Invalid time format: ${time}, using default`);
+      return '09:00';
+    }
+
+    return time;
+  };
+
   const handleHoursChange = (index: number, field: keyof WorkingHours, newValue: any) => {
     const updatedHours = [...value];
+
+    // Validate time fields
+    if (field === 'open_time' || field === 'close_time') {
+      newValue = validateTimeFormat(newValue);
+    }
+
     updatedHours[index] = {
       ...updatedHours[index],
       [field]: newValue,
     };
+
+    console.log(`Updated ${field} for ${updatedHours[index].day} to ${newValue}`);
     onChange(updatedHours);
   };
 
@@ -79,7 +105,7 @@ const WorkingHoursSelector: React.FC<WorkingHoursSelectorProps> = ({
           <div className="text-sm font-medium">
             {DAYS_OF_WEEK.find(d => d.id === hours.day)?.label}
           </div>
-          
+
           <div className="col-span-2">
             <Input
               type="time"
@@ -89,7 +115,7 @@ const WorkingHoursSelector: React.FC<WorkingHoursSelectorProps> = ({
               className={`h-9 ${hours.is_closed ? 'opacity-50' : ''}`}
             />
           </div>
-          
+
           <div className="col-span-2">
             <Input
               type="time"
@@ -99,14 +125,14 @@ const WorkingHoursSelector: React.FC<WorkingHoursSelectorProps> = ({
               className={`h-9 ${hours.is_closed ? 'opacity-50' : ''}`}
             />
           </div>
-          
+
           <div className="flex justify-center">
             <Switch
               checked={hours.is_closed}
               onCheckedChange={(checked) => handleHoursChange(index, 'is_closed', checked)}
             />
           </div>
-          
+
           <div className="flex justify-center">
             <button
               type="button"
@@ -119,7 +145,7 @@ const WorkingHoursSelector: React.FC<WorkingHoursSelectorProps> = ({
           </div>
         </div>
       ))}
-      
+
       <div className="text-xs text-gray-500 mt-2">
         Note: Toggle the switch to mark a day as closed.
       </div>

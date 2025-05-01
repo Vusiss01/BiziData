@@ -1,40 +1,66 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getSupabaseClient } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, Store } from 'lucide-react';
+import { db } from '@/lib/firebase';
 
 interface Restaurant {
   id: string;
   name: string;
-  created_at: string;
+  created_at: Date | string;
 }
 
 const RecentShopsList = () => {
-  const supabase = getSupabaseClient();
-
   const { data: restaurants, isLoading, error } = useQuery({
     queryKey: ['recentRestaurants'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('restaurants')
-        .select('id,name,created_at')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      try {
+        console.log('Fetching recent restaurants from Firebase');
 
-      if (error) {
-        console.error('Error fetching restaurants:', error);
-        throw error;
+        // Import necessary Firebase functions
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+
+        // Create query to get 5 most recent restaurants
+        const restaurantsQuery = query(
+          collection(db, 'restaurants'),
+          orderBy('created_at', 'desc'),
+          limit(5)
+        );
+
+        // Execute query
+        const snapshot = await getDocs(restaurantsQuery);
+
+        console.log(`Query returned ${snapshot.docs.length} recent restaurants`);
+
+        // Process results
+        const restaurantData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name,
+            created_at: data.created_at?.toDate?.() || data.created_at
+          };
+        });
+
+        return restaurantData;
+      } catch (err) {
+        console.error('Error fetching recent restaurants:', err);
+        throw err;
       }
-
-      return data || [];
     },
   });
 
   // Function to format the date
-  function formatDate(dateString: string) {
-    const date = new Date(dateString);
+  function formatDate(dateValue: Date | string) {
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date:', dateValue);
+      return 'Unknown date';
+    }
+
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));

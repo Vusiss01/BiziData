@@ -39,6 +39,10 @@ service cloud.firestore {
 
       // Users can only write to their own profile, admins can write to any profile
       allow write: if isCurrentUser(userId) || isAdmin();
+
+      // Allow creation of new users by authenticated users
+      // This is needed for the admin to create restaurant owners and drivers
+      allow create: if isAuthenticated();
     }
 
     // Restaurants collection

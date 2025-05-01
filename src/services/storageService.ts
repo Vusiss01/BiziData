@@ -37,7 +37,7 @@ function generateUniqueFilename(originalName: string): string {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 10);
   const extension = originalName.split('.').pop();
-  
+
   return `${timestamp}-${randomString}.${extension}`;
 }
 
@@ -49,6 +49,8 @@ export async function uploadFile(
   options: FileUploadOptions = {}
 ): Promise<FileUploadResult> {
   try {
+    console.log(`Starting file upload: ${file.name} (${file.size} bytes, ${file.type})`);
+
     const {
       folderPath = '',
       fileName,
@@ -57,57 +59,75 @@ export async function uploadFile(
       metadata = {},
       onProgress
     } = options;
-    
+
+    console.log(`Upload options: folderPath=${folderPath}, fileName=${fileName}, contentType=${contentType}`);
+
     // Generate or use provided filename
     const finalFileName = shouldGenerateUniqueFilename
       ? generateUniqueFilename(fileName || file.name)
       : (fileName || file.name);
-    
+
+    console.log(`Final filename: ${finalFileName}`);
+
     // Create the full path
     const fullPath = folderPath
       ? `${folderPath}/${finalFileName}`.replace(/\/+/g, '/')
       : finalFileName;
-    
+
+    console.log(`Full storage path: ${fullPath}`);
+
     // Create a storage reference
     const storageRef = ref(storage, fullPath);
-    
+
     // Set up metadata
     const fileMetadata = {
       contentType,
       customMetadata: metadata
     };
-    
+
+    console.log(`Starting upload to Firebase Storage`);
+
     // If progress callback is provided, use resumable upload
     if (onProgress) {
+      console.log(`Using resumable upload with progress monitoring`);
       const uploadTask = uploadBytesResumable(storageRef, file, fileMetadata);
-      
+
       // Set up progress monitoring
-      uploadTask.on('state_changed', 
+      uploadTask.on('state_changed',
         (snapshot: UploadTaskSnapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload progress: ${progress.toFixed(2)}%`);
           onProgress(progress);
         },
         (error) => {
+          console.error(`Upload error during progress monitoring:`, error);
           throw error;
         }
       );
-      
+
       // Wait for the upload to complete
       await uploadTask;
+      console.log(`Resumable upload completed`);
     } else {
       // Use simple upload without progress monitoring
+      console.log(`Using simple upload without progress monitoring`);
       await uploadBytes(storageRef, file, fileMetadata);
+      console.log(`Simple upload completed`);
     }
-    
+
     // Get the download URL
+    console.log(`Getting download URL for uploaded file`);
     const url = await getFirebaseDownloadURL(storageRef);
-    
+    console.log(`Download URL obtained: ${url}`);
+
     return {
       path: fullPath,
       url,
       error: null
     };
   } catch (error) {
+    console.error(`Error uploading file:`, error);
+
     logError(error, {
       category: ErrorCategory.STORAGE,
       severity: ErrorSeverity.ERROR,
@@ -117,7 +137,7 @@ export async function uploadFile(
         options
       },
     });
-    
+
     return { path: null, url: null, error: error as Error };
   }
 }
@@ -137,7 +157,7 @@ export async function getDownloadURL(path: string): Promise<string | null> {
         path
       },
     });
-    
+
     return null;
   }
 }
@@ -158,7 +178,7 @@ export async function deleteFile(path: string): Promise<boolean> {
         path
       },
     });
-    
+
     return false;
   }
 }
