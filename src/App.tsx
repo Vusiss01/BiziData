@@ -9,6 +9,8 @@ import CreateModelPage from "./pages/CreateModelPage";
 import ProfilePage from "./pages/ProfilePage";
 import TestPage from "./pages/TestPage";
 import RestaurantOwnersPage from "./pages/RestaurantOwnersPage";
+import RestaurantsPage from "./pages/RestaurantsPage";
+import RestaurantsPageSimple from "./pages/RestaurantsPageSimple";
 import DriversPage from "./pages/DriversPage";
 import DashboardPage from "./pages/DashboardPage";
 import DebugPage from "./pages/DebugPage";
@@ -45,6 +47,7 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/test" element={<TestPage />} />
               <Route path="/restaurant-owners" element={<RestaurantOwnersPage />} />
+              <Route path="/restaurants" element={<RestaurantsPage />} />
               <Route path="/drivers" element={<DriversPage />} />
               <Route path="/users" element={<UserManagementPage />} />
               <Route path="/debug" element={<DebugPage />} />

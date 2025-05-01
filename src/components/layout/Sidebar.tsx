@@ -33,6 +33,7 @@ const Sidebar = ({ className }: SidebarProps) => {
     { icon: Home, label: "Home", path: "/home" },
     { icon: Users, label: "User Management", path: "/users" },
     { icon: UserCog, label: "Restaurant Owners", path: "/restaurant-owners" },
+    { icon: Store, label: "Restaurants", path: "/restaurants" },
     { icon: Car, label: "Drivers", path: "/drivers" },
     { icon: ShoppingBag, label: "Orders", path: "/orders", badge: 12 },
     { icon: Utensils, label: "Menu Items", path: "/menu-items" },
