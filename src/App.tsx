@@ -7,11 +7,7 @@ import DataModelsPage from "./pages/DataModelsPage";
 import OrdersPage from "./pages/OrdersPage";
 import CreateModelPage from "./pages/CreateModelPage";
 import ProfilePage from "./pages/ProfilePage";
-import RestaurantsPage from "./pages/RestaurantsPage";
-import SimpleRestaurantsPage from "./pages/SimpleRestaurantsPage";
 import TestPage from "./pages/TestPage";
-import BasicRestaurantsPage from "./pages/BasicRestaurantsPage";
-import EnhancedRestaurantsPage from "./pages/EnhancedRestaurantsPage";
 import RestaurantOwnersPage from "./pages/RestaurantOwnersPage";
 import DriversPage from "./pages/DriversPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -48,9 +44,6 @@ function App() {
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/test" element={<TestPage />} />
-              <Route path="/restaurants" element={<EnhancedRestaurantsPage />} />
-              <Route path="/restaurants-simple" element={<SimpleRestaurantsPage />} />
-              <Route path="/restaurants-full" element={<RestaurantsPage />} />
               <Route path="/restaurant-owners" element={<RestaurantOwnersPage />} />
               <Route path="/drivers" element={<DriversPage />} />
               <Route path="/users" element={<UserManagementPage />} />

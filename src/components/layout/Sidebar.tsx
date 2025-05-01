@@ -31,7 +31,6 @@ const Sidebar = ({ className }: SidebarProps) => {
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: Home, label: "Home", path: "/home" },
-    { icon: Store, label: "Restaurants", path: "/restaurants" },
     { icon: Users, label: "User Management", path: "/users" },
     { icon: UserCog, label: "Restaurant Owners", path: "/restaurant-owners" },
     { icon: Car, label: "Drivers", path: "/drivers" },

@@ -8,7 +8,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import AddOwnerForm from "@/components/users/AddOwnerForm";
 import { useAuth } from "@/hooks/useAuth";
 import { getRestaurantOwners } from "@/services/userService";
-import { getRestaurantsByOwnerId } from "@/services/restaurantService";
 import useErrorHandler from "@/hooks/useErrorHandler";
 import { ErrorCategory } from "@/utils/errorHandler";
 import {
@@ -70,41 +69,20 @@ const RestaurantOwnersPage = () => {
 
           console.log(`Found ${owners.length} restaurant owners, fetching their restaurants...`);
 
-          // Fetch restaurants for each owner
-          const ownersWithRestaurants = await Promise.all(
-            owners.map(async (owner) => {
-              try {
-                console.log(`Fetching restaurants for owner ${owner.id} (${owner.name})`);
-                const { data: restaurants, error: restaurantError } = await getRestaurantsByOwnerId(owner.id);
+          // Process owners without fetching restaurants (since we removed the restaurant service)
+          const ownersWithRestaurants = owners.map((owner) => {
+            // Determine status based on user data or default to verified
+            const status = owner.status || (owner.is_verified ? 'verified' : 'pending');
 
-                if (restaurantError) {
-                  console.warn(`Error fetching restaurants for owner ${owner.id}:`, restaurantError);
-                }
-
-                // Determine status based on user data or default to verified
-                const status = owner.status || (owner.is_verified ? 'verified' : 'pending');
-
-                return {
-                  ...owner,
-                  restaurants: restaurants?.map(r => r.name) || [],
-                  status: status,
-                  joinDate: owner.created_at
-                    ? new Date(owner.created_at).toISOString().split('T')[0]
-                    : 'Unknown'
-                };
-              } catch (error) {
-                console.error(`Error processing restaurants for owner ${owner.id}:`, error);
-                return {
-                  ...owner,
-                  restaurants: [],
-                  status: owner.status || 'verified',
-                  joinDate: owner.created_at
-                    ? new Date(owner.created_at).toISOString().split('T')[0]
-                    : 'Unknown'
-                };
-              }
-            })
-          );
+            return {
+              ...owner,
+              restaurants: [], // Empty array since we removed restaurant service
+              status: status,
+              joinDate: owner.created_at
+                ? new Date(owner.created_at).toISOString().split('T')[0]
+                : 'Unknown'
+            };
+          });
 
           console.log("Successfully processed all restaurant owners with their restaurants");
           setOwners(ownersWithRestaurants);
