@@ -72,7 +72,10 @@ const RestaurantOwnersPage = () => {
           // Process owners without fetching restaurants (since we removed the restaurant service)
           const ownersWithRestaurants = owners.map((owner) => {
             // Determine status based on user data or default to verified
-            const status = owner.status || (owner.is_verified ? 'verified' : 'pending');
+            // If status is explicitly set, use it
+            // If is_verified is explicitly set, use that
+            // Otherwise, default to 'verified' for all owners created by admins
+            const status = owner.status || (owner.is_verified === false ? 'pending' : 'verified');
 
             return {
               ...owner,
@@ -208,7 +211,7 @@ const RestaurantOwnersPage = () => {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${owner.name}`} />
+                        <AvatarImage src={owner.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${owner.name}`} />
                         <AvatarFallback>
                           <UserCog className="h-4 w-4" />
                         </AvatarFallback>

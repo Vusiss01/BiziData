@@ -68,6 +68,7 @@ export interface CreateUserOptions {
   address?: string | null;
   current_suburb?: string | null;
   profileImage?: File | null;
+  is_verified?: boolean;
 }
 
 /**
@@ -481,7 +482,7 @@ export async function uploadProfileImage(userId: string, file: File) {
  */
 export async function createUser(options: CreateUserOptions) {
   try {
-    const { email, password, name, role, phone, address, current_suburb, profileImage } = options;
+    const { email, password, name, role, phone, address, current_suburb, profileImage, is_verified = true } = options;
 
     console.log(`Creating user with email: ${email}, role: ${role}`);
 
@@ -533,6 +534,7 @@ export async function createUser(options: CreateUserOptions) {
       current_suburb: current_suburb || null,
       profile_image_url: null,
       profile_image_path: null,
+      is_verified: is_verified,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp()
     };
@@ -622,6 +624,7 @@ export async function createUser(options: CreateUserOptions) {
         current_suburb: options.current_suburb || null,
         profile_image_url: null,
         profile_image_path: null,
+        is_verified: options.is_verified !== undefined ? options.is_verified : true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         isMockUser: true
@@ -650,10 +653,11 @@ export async function createUserRecord(
     address?: string;
     current_suburb?: string;
     profileImage?: File;
+    is_verified?: boolean;
   }
 ) {
   try {
-    const { id, email, name, role, phone, address, current_suburb, profileImage } = userData;
+    const { id, email, name, role, phone, address, current_suburb, profileImage, is_verified = true } = userData;
 
     // Generate ID if not provided
     const userId = id || doc(collection(db, 'users')).id;
@@ -669,6 +673,7 @@ export async function createUserRecord(
       current_suburb: current_suburb || null,
       profile_image_url: null,
       profile_image_path: null,
+      is_verified: is_verified,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp()
     };

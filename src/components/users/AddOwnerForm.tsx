@@ -136,6 +136,7 @@ const AddOwnerForm = ({ onClose, onSuccess }: AddOwnerFormProps) => {
             ...formData,
             role: 'owner', // This must match exactly what we query for in getRestaurantOwners
             profileImage,
+            is_verified: isVerified, // Pass the verification status from the switch
           });
 
           // Handle partial success (user created in auth but not in Firestore)
