@@ -80,6 +80,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // User Settings collection
+    match /user_settings/{userId} {
+      // Users can only read and write their own settings
+      allow read, write: if isCurrentUser(userId);
+
+      // Admins can read and write all user settings
+      allow read, write: if isAdmin();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

@@ -26,6 +26,7 @@ import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import { AuthProvider } from "./hooks/useAuth";
+import { ThemeProvider } from "./hooks/useTheme";
 import { Toaster } from "./components/ui/toaster";
 
 import ErrorBoundary from "./components/common/ErrorBoundary";
@@ -34,18 +35,19 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Suspense fallback={<p>Loading...</p>}>
-          <>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
-                }
-              >
+        <ThemeProvider>
+          <Suspense fallback={<p>Loading...</p>}>
+            <>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout />
+                    </ProtectedRoute>
+                  }
+                >
               <Route path="/" element={<DashboardPage />} />
               <Route path="/home" element={<HomePage />} />
               <Route path="/data-models" element={<DataModelsPage />} />
@@ -71,6 +73,7 @@ function App() {
         </>
       </Suspense>
       <Toaster />
+    </ThemeProvider>
     </AuthProvider>
     </ErrorBoundary>
   );

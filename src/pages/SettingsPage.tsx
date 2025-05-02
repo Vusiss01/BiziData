@@ -8,9 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Settings, Bell, Shield, Smartphone, Globe, Save, Loader2, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/components/ui/use-toast";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import ChangePasswordDialog from "@/components/settings/ChangePasswordDialog";
 
 interface UserSettings {
   notifications: {
@@ -54,11 +56,13 @@ const defaultSettings: UserSettings = {
 
 const SettingsPage = () => {
   const { user } = useAuth();
+  const { setTheme } = useTheme();
   const { toast } = useToast();
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Fetch user settings from Firebase
   useEffect(() => {
@@ -80,13 +84,29 @@ const SettingsPage = () => {
           // Use the settings from Firestore
           const userSettings = settingsDoc.data() as UserSettings;
           setSettings(userSettings);
+
+          // Apply theme from settings
+          if (userSettings.appearance?.theme) {
+            setTheme(userSettings.appearance.theme);
+          }
         } else {
-          // Use default settings
-          setSettings(defaultSettings);
+          // Create default settings document for the user
+          try {
+            await setDoc(settingsDocRef, defaultSettings);
+            console.log("Created default settings for user:", user.uid);
+            setSettings(defaultSettings);
+          } catch (createErr) {
+            console.error("Error creating default settings:", createErr);
+            // Still use default settings in the UI even if creation fails
+            setSettings(defaultSettings);
+          }
         }
       } catch (err) {
         console.error("Error fetching user settings:", err);
-        setError(err instanceof Error ? err : new Error("Failed to load settings"));
+        const errorMessage = err instanceof Error
+          ? err.message
+          : "Failed to load settings";
+        setError(new Error(errorMessage));
       } finally {
         setIsLoading(false);
       }
@@ -109,9 +129,17 @@ const SettingsPage = () => {
     setIsSaving(true);
 
     try {
-      // Update settings in Firestore
+      // Check if settings document exists first
       const settingsDocRef = doc(db, "user_settings", user.uid);
-      await updateDoc(settingsDocRef, settings);
+      const settingsDoc = await getDoc(settingsDocRef);
+
+      if (settingsDoc.exists()) {
+        // Update existing document
+        await updateDoc(settingsDocRef, settings);
+      } else {
+        // Create new document with setDoc (not updateDoc)
+        await setDoc(settingsDocRef, settings);
+      }
 
       toast({
         title: "Success",
@@ -120,9 +148,13 @@ const SettingsPage = () => {
       });
     } catch (err) {
       console.error("Error saving settings:", err);
+      const errorMessage = err instanceof Error
+        ? err.message
+        : "Failed to save settings. Please try again.";
+
       toast({
         title: "Error",
-        description: "Failed to save settings. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -159,13 +191,18 @@ const SettingsPage = () => {
         [key]: value,
       },
     });
+
+    // If the theme is being updated, apply it immediately
+    if (key === 'theme' && (value === 'light' || value === 'dark' || value === 'system')) {
+      setTheme(value);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <Button 
+        <Button
           className="bg-orange-600 hover:bg-orange-700"
           onClick={saveSettings}
           disabled={isSaving || isLoading}
@@ -184,18 +221,33 @@ const SettingsPage = () => {
         </Button>
       </div>
 
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
+
       {isLoading ? (
         <div className="flex items-center justify-center p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500 mr-2" />
           <p>Loading settings...</p>
         </div>
       ) : error ? (
-        <div className="flex items-center justify-center p-12 text-red-500">
-          <AlertCircle className="h-8 w-8 mr-2" />
-          <div>
-            <p className="font-semibold">Error loading settings</p>
-            <p className="text-sm">{error.message}</p>
+        <div className="flex flex-col items-center justify-center p-12">
+          <div className="flex items-center text-red-500 mb-4">
+            <AlertCircle className="h-8 w-8 mr-2" />
+            <div>
+              <p className="font-semibold">Error loading settings</p>
+              <p className="text-sm">{error.message}</p>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            onClick={() => window.location.reload()}
+            className="mt-4"
+          >
+            Retry
+          </Button>
         </div>
       ) : (
         <Tabs defaultValue="notifications" className="space-y-6">
@@ -345,13 +397,22 @@ const SettingsPage = () => {
                 <div className="space-y-4">
                   <h3 className="font-medium">Security</h3>
                   <div className="space-y-3">
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setIsChangePasswordOpen(true)}
+                    >
                       <Shield className="h-4 w-4 mr-2" />
                       Change Password
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      disabled={true}
+                      title="Coming soon"
+                    >
                       <Smartphone className="h-4 w-4 mr-2" />
-                      Two-Factor Authentication
+                      Two-Factor Authentication (Coming Soon)
                     </Button>
                   </div>
                 </div>
