@@ -10,10 +10,15 @@ const sourceDir = path.join(__dirname, 'src', 'docs');
 const destDir1 = path.join(__dirname, 'public', 'src', 'docs');
 const destDir2 = path.join(__dirname, 'public', 'docs');
 
-// Create destination directory if it doesn't exist
-if (!fs.existsSync(destDir)) {
-  fs.mkdirSync(destDir, { recursive: true });
-  console.log(`Created directory: ${destDir}`);
+// Create destination directories if they don't exist
+if (!fs.existsSync(destDir1)) {
+  fs.mkdirSync(destDir1, { recursive: true });
+  console.log(`Created directory: ${destDir1}`);
+}
+
+if (!fs.existsSync(destDir2)) {
+  fs.mkdirSync(destDir2, { recursive: true });
+  console.log(`Created directory: ${destDir2}`);
 }
 
 // Copy all markdown files
@@ -23,9 +28,15 @@ try {
   files.forEach(file => {
     if (file.endsWith('.md')) {
       const sourcePath = path.join(sourceDir, file);
-      const destPath = path.join(destDir, file);
+      const destPath1 = path.join(destDir1, file);
+      const destPath2 = path.join(destDir2, file);
 
-      fs.copyFileSync(sourcePath, destPath);
+      // Copy to first destination
+      fs.copyFileSync(sourcePath, destPath1);
+
+      // Copy to second destination
+      fs.copyFileSync(sourcePath, destPath2);
+
       console.log(`Copied: ${file}`);
     }
   });
