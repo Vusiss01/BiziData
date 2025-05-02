@@ -4,19 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, AlertCircle, Star } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { convertTimestamps } from '@/services/databaseService';
 
-interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  rating: number;
-  address: string;
-  created_at: Date;
-}
-
+// Simplified version with minimal data processing
 const RecentRestaurants = () => {
-  const { data: restaurants, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['recentRestaurants'],
     queryFn: async () => {
       try {
@@ -32,26 +23,23 @@ const RecentRestaurants = () => {
         // Execute query
         const snapshot = await getDocs(restaurantsQuery);
 
-        // Process results
-        const restaurantData = snapshot.docs.map(doc => {
+        // Process results with minimal transformation
+        return snapshot.docs.map(doc => {
           const data = doc.data();
-          // Ensure rating is a valid number
-          let rating = 0;
-          if (data.rating !== undefined && data.rating !== null) {
-            rating = typeof data.rating === 'number' ? data.rating : 0;
-          }
 
-          return convertTimestamps({
+          // Create a safe restaurant object with only string/number values
+          return {
             id: doc.id,
             name: data.name || 'Unnamed Restaurant',
-            cuisine: data.cuisine || 'Various',
-            rating: rating,
-            address: data.address || 'No address',
-            created_at: data.created_at
-          });
+            cuisine: data.cuisine_type || data.cuisine || 'Various',
+            // Ensure rating is a valid number
+            rating: typeof data.rating === 'number' ? data.rating : 0,
+            // Format address as a string or use default
+            addressText: formatAddressToString(data.address),
+            // Format date as a string
+            createdAt: formatDate(data.created_at?.toDate?.() || data.created_at)
+          };
         });
-
-        return restaurantData as Restaurant[];
       } catch (error) {
         console.error('Error fetching recent restaurants:', error);
         throw error;
@@ -59,18 +47,69 @@ const RecentRestaurants = () => {
     },
   });
 
+  // Helper function to safely format an address to a string
+  function formatAddressToString(address: any): string {
+    try {
+      // Handle string addresses
+      if (typeof address === 'string') {
+        return address;
+      }
 
+      // Handle null/undefined
+      if (!address) {
+        return 'No address';
+      }
+
+      // Handle empty objects
+      if (typeof address === 'object' && Object.keys(address).length === 0) {
+        return 'No address details';
+      }
+
+      // Handle address objects
+      if (typeof address === 'object') {
+        // Try standard address format
+        const parts = [
+          address.street,
+          address.city,
+          address.state,
+          address.zipCode,
+          address.country
+        ].filter(Boolean);
+
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+
+        // Try to extract any string values
+        const values = Object.values(address)
+          .filter(val => val && typeof val !== 'object' && typeof val !== 'function')
+          .map(val => String(val));
+
+        if (values.length > 0) {
+          return values.join(', ');
+        }
+      }
+
+      // Default fallback
+      return 'Address unavailable';
+    } catch (err) {
+      console.error('Error formatting address:', err);
+      return 'Address error';
+    }
+  }
 
   // Helper function to format date
-  const formatDate = (date: Date | null | undefined): string => {
+  function formatDate(date: any): string {
     try {
       if (!date) {
         return 'Unknown date';
       }
 
+      // Convert to Date object if it's not already
+      const dateObj = date instanceof Date ? date : new Date(date);
+
       // Check if date is valid
-      if (!(date instanceof Date) || isNaN(date.getTime())) {
-        console.warn('Invalid date:', date);
+      if (isNaN(dateObj.getTime())) {
         return 'Unknown date';
       }
 
@@ -78,12 +117,12 @@ const RecentRestaurants = () => {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
-      }).format(date);
+      }).format(dateObj);
     } catch (error) {
       console.error('Error formatting date:', error);
       return 'Unknown date';
     }
-  };
+  }
 
   // Helper function to render stars
   const renderStars = (rating: number) => {
@@ -143,21 +182,23 @@ const RecentRestaurants = () => {
             <AlertCircle className="h-6 w-6 mr-2" />
             <p>Error loading restaurants</p>
           </div>
-        ) : restaurants && restaurants.length > 0 ? (
+        ) : data && data.length > 0 ? (
           <div className="space-y-4">
-            {restaurants.map((restaurant) => (
+            {data.map((restaurant) => (
               <div key={restaurant.id} className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0">
                 <div>
                   <h3 className="font-medium">{restaurant.name}</h3>
                   <p className="text-sm text-gray-500">{restaurant.cuisine}</p>
                   <div className="flex items-center mt-1">
-                    {renderStars(restaurant.rating || 0)}
-                    <span className="text-sm ml-1">{(restaurant.rating || 0).toFixed(1)}</span>
+                    {renderStars(restaurant.rating)}
+                    <span className="text-sm ml-1">{restaurant.rating.toFixed(1)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{restaurant.address}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {restaurant.addressText}
+                  </p>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {formatDate(restaurant.created_at)}
+                  {restaurant.createdAt}
                 </div>
               </div>
             ))}
