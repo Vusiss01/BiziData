@@ -3,21 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
-  ShoppingBag,
-  Utensils,
-  Database,
-  TrendingUp,
   Plus,
-  Loader2,
-  AlertCircle,
   ExternalLink,
 } from "lucide-react";
-import { useQuery } from '@tanstack/react-query';
 import CreateProjectModal from "@/components/projects/CreateProjectModal";
 import DemoNotice from "@/components/common/DemoNotice";
 import { useAuth } from "@/hooks/useAuth";
 import FirebaseConnectionTest from "@/components/FirebaseConnectionTest";
-import HomeMetrics from "@/components/dashboard/HomeMetrics";
+import FirebaseMetrics from "@/components/dashboard/FirebaseMetrics";
 import PopularDataModelsList from "@/components/dashboard/PopularDataModelsList";
 import RecentShopsList from "@/components/dashboard/RecentShopsList";
 
@@ -70,8 +63,8 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Metrics with React Query */}
-      <HomeMetrics />
+      {/* Metrics with Firebase */}
+      <FirebaseMetrics />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

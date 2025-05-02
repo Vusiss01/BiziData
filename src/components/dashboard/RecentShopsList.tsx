@@ -1,10 +1,10 @@
-import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, Store } from 'lucide-react';
 import { db } from '@/lib/firebase';
 
+// Define the Restaurant interface for type safety
 interface Restaurant {
   id: string;
   name: string;
@@ -14,7 +14,8 @@ interface Restaurant {
 const RecentShopsList = () => {
   const { data: restaurants, isLoading, error } = useQuery({
     queryKey: ['recentRestaurants'],
-    queryFn: async () => {
+    refetchInterval: 5000, // Refetch every 5 seconds
+    queryFn: async (): Promise<Restaurant[]> => {
       try {
         console.log('Fetching recent restaurants from Firebase');
 
@@ -34,12 +35,12 @@ const RecentShopsList = () => {
         console.log(`Query returned ${snapshot.docs.length} recent restaurants`);
 
         // Process results
-        const restaurantData = snapshot.docs.map(doc => {
+        const restaurantData: Restaurant[] = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
             id: doc.id,
-            name: data.name,
-            created_at: data.created_at?.toDate?.() || data.created_at
+            name: data.name || 'Unnamed Restaurant',
+            created_at: data.created_at?.toDate?.() || data.created_at || new Date()
           };
         });
 
@@ -52,27 +53,37 @@ const RecentShopsList = () => {
   });
 
   // Function to format the date
-  function formatDate(dateValue: Date | string) {
-    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  function formatDate(dateValue: Date | string | null | undefined) {
+    try {
+      // Handle null or undefined
+      if (dateValue === null || dateValue === undefined) {
+        return 'Unknown date';
+      }
 
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date:', dateValue);
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', dateValue);
+        return 'Unknown date';
+      }
+
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        return 'Today';
+      } else if (diffDays === 1) {
+        return 'Yesterday';
+      } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+      } else {
+        return date.toLocaleDateString();
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
       return 'Unknown date';
-    }
-
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return 'Today';
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
     }
   }
 
@@ -87,9 +98,12 @@ const RecentShopsList = () => {
 
   if (error || !restaurants || restaurants.length === 0) {
     return (
-      <div className="flex items-center justify-center p-4 text-gray-500">
-        <AlertCircle className="h-5 w-5 mr-2" />
-        <p>No restaurants found</p>
+      <div className="flex flex-col items-center justify-center p-8 text-gray-500">
+        <AlertCircle className="h-10 w-10 mb-2 opacity-50" />
+        <p className="text-lg font-medium">No restaurants found</p>
+        <p className="text-sm text-center mt-1">
+          Restaurants will appear here once they are created.
+        </p>
       </div>
     );
   }

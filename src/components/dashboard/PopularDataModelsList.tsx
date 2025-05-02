@@ -1,35 +1,36 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getSupabaseClient } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Database, Loader2, AlertCircle } from 'lucide-react';
-
-interface DataModel {
-  id: string;
-  name: string;
-  usage_count: number;
-  type: string;
-}
+import { getPopularDataModels, initializeDefaultDataModels, DataModel } from '@/services/dataModelService';
 
 const PopularDataModelsList = () => {
-  const supabase = getSupabaseClient();
+  // Initialize default data models if none exist
+  useEffect(() => {
+    initializeDefaultDataModels()
+      .then(success => {
+        if (success) {
+          console.log('Data models initialized or already exist');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to initialize data models:', error);
+      });
+  }, []);
 
+  // Fetch popular data models using React Query
   const { data: dataModels, isLoading, error } = useQuery({
     queryKey: ['popularDataModels'],
+    refetchInterval: 5000, // Refetch every 5 seconds
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('data_models')
-        .select('id,name,usage_count,type')
-        .order('usage_count', { ascending: false })
-        .limit(5);
-
-      if (error) {
-        console.error('Error fetching data models:', error);
+      try {
+        console.log('Fetching popular data models from Firebase');
+        return await getPopularDataModels(5);
+      } catch (error) {
+        console.error('Error fetching popular data models:', error);
         throw error;
       }
-
-      return data || [];
     },
   });
 
@@ -44,9 +45,12 @@ const PopularDataModelsList = () => {
 
   if (error || !dataModels || dataModels.length === 0) {
     return (
-      <div className="flex items-center justify-center p-4 text-gray-500">
-        <AlertCircle className="h-5 w-5 mr-2" />
-        <p>No data models found</p>
+      <div className="flex flex-col items-center justify-center p-8 text-gray-500">
+        <AlertCircle className="h-10 w-10 mb-2 opacity-50" />
+        <p className="text-lg font-medium">No data models found</p>
+        <p className="text-sm text-center mt-1">
+          Data models will appear here once they are created.
+        </p>
       </div>
     );
   }
@@ -65,17 +69,17 @@ const PopularDataModelsList = () => {
             <div>
               <p className="font-medium">{model.name}</p>
               <p className="text-sm text-gray-500">
-                {model.usage_count} active users
+                {model.usageCount} active users
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-              {model.type.charAt(0).toUpperCase() + model.type.slice(1)}
+              {model.category.charAt(0).toUpperCase() + model.category.slice(1)}
             </span>
-            <Link to={`/models/${model.id}`}>
+            <Link to={`/data-models/${model.id}`}>
               <Button variant="outline" size="sm">
-                View
+                Details
               </Button>
             </Link>
           </div>

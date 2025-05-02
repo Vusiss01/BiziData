@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -37,92 +37,82 @@ import {
   Star,
   DollarSign,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { db } from "@/lib/firebase";
+import AddRestaurantForm from "@/components/restaurants/AddRestaurantForm";
+import { getAllRestaurants } from "@/services/restaurantService";
 
 // We're using the global QueryClient from main.tsx
 
-// Define the Restaurant interface based on your Firestore schema
-interface Restaurant {
-  id: string;
-  name: string;
-  description?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  };
-  contact?: {
-    phone?: string;
-    email?: string;
-    website?: string;
-  };
-  cuisine?: string[];
-  priceRange?: number;
-  rating?: number;
-  status?: string;
-  created_at: Date | string;
-  owner_id?: string;
-}
+// Import the Restaurant interface from the service
+import { Restaurant } from '@/services/restaurantService';
+import { isRestaurantOpen, getTodayHours } from '@/utils/restaurantUtils';
+import { getUserById } from '@/services/userService';
 
 const RestaurantsContent = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showAddRestaurantModal, setShowAddRestaurantModal] = useState(false);
+
+  const queryClient = useQueryClient();
 
   // Fetch all restaurants using React Query
   const { data: restaurants, isLoading, error } = useQuery({
-    queryKey: ["allRestaurants", sortBy, sortOrder],
+    queryKey: ["allRestaurants", sortBy, sortOrder, statusFilter],
     queryFn: async () => {
       try {
         console.log("Fetching all restaurants from Firebase");
+        const allRestaurants = await getAllRestaurants();
 
-        // Import necessary Firebase functions
-        const { collection, query, orderBy, getDocs, where } = await import(
-          "firebase/firestore"
-        );
-
-        // Create base query
-        let restaurantsQuery = query(
-          collection(db, "restaurants"),
-          orderBy(sortBy, sortOrder)
-        );
-
-        // Add status filter if not "all"
+        // Filter by status if needed
+        let filteredRestaurants = allRestaurants;
         if (statusFilter !== "all") {
-          restaurantsQuery = query(
-            collection(db, "restaurants"),
-            where("status", "==", statusFilter),
-            orderBy(sortBy, sortOrder)
+          filteredRestaurants = allRestaurants.filter(
+            (restaurant) => restaurant.status === statusFilter
           );
         }
 
-        // Execute query
-        const snapshot = await getDocs(restaurantsQuery);
+        // Sort restaurants
+        return filteredRestaurants.sort((a, b) => {
+          // Handle dates for created_at
+          if (sortBy === "created_at") {
+            // Convert to Date objects, handling Timestamps
+            let dateA: Date;
+            let dateB: Date;
 
-        console.log(`Query returned ${snapshot.docs.length} restaurants`);
+            if (a.created_at instanceof Date) {
+              dateA = a.created_at;
+            } else if (a.created_at && typeof a.created_at === 'object' && 'toDate' in a.created_at) {
+              dateA = a.created_at.toDate();
+            } else {
+              dateA = new Date(0); // Default to epoch if invalid
+            }
 
-        // Process results
-        const restaurantData = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            description: data.description,
-            address: data.address,
-            contact: data.contact,
-            cuisine: data.cuisine,
-            priceRange: data.priceRange,
-            rating: data.rating,
-            status: data.status || "active",
-            created_at: data.created_at?.toDate?.() || data.created_at,
-            owner_id: data.owner_id,
-          };
+            if (b.created_at instanceof Date) {
+              dateB = b.created_at;
+            } else if (b.created_at && typeof b.created_at === 'object' && 'toDate' in b.created_at) {
+              dateB = b.created_at.toDate();
+            } else {
+              dateB = new Date(0); // Default to epoch if invalid
+            }
+
+            return sortOrder === "desc" ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
+          }
+
+          // Handle strings (name, etc.)
+          if (typeof a[sortBy as keyof typeof a] === "string" && typeof b[sortBy as keyof typeof b] === "string") {
+            const valueA = (a[sortBy as keyof typeof a] as string).toLowerCase();
+            const valueB = (b[sortBy as keyof typeof b] as string).toLowerCase();
+            return sortOrder === "desc" ? valueB.localeCompare(valueA) : valueA.localeCompare(valueB);
+          }
+
+          // Handle numbers (rating, etc.)
+          const valueA = a[sortBy as keyof typeof a] as number || 0;
+          const valueB = b[sortBy as keyof typeof b] as number || 0;
+          return sortOrder === "desc" ? valueB - valueA : valueA - valueB;
         });
-
-        return restaurantData;
       } catch (err) {
         console.error("Error fetching restaurants:", err);
         throw err;
@@ -149,11 +139,60 @@ const RestaurantsContent = () => {
       )
     : [];
 
+  // Restaurant Owner component
+  const RestaurantOwner = ({ ownerId }: { ownerId?: string }) => {
+    const { data: owner, isLoading } = useQuery({
+      queryKey: ['owner', ownerId],
+      queryFn: async () => {
+        if (!ownerId) return null;
+        const result = await getUserById(ownerId);
+        return result.data;
+      },
+      enabled: !!ownerId,
+    });
+
+    if (isLoading) {
+      return <div className="flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...</div>;
+    }
+
+    if (!owner) {
+      return <span className="text-gray-500">No owner assigned</span>;
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <Avatar className="h-6 w-6">
+          {owner.profile_image_url ? (
+            <AvatarImage src={owner.profile_image_url} alt={owner.name} />
+          ) : (
+            <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${owner.name}`} alt={owner.name} />
+          )}
+          <AvatarFallback>{owner.name.charAt(0)}</AvatarFallback>
+        </Avatar>
+        <span>{owner.name}</span>
+      </div>
+    );
+  };
+
   // Function to format the date
-  function formatDate(dateValue: Date | string) {
+  function formatDate(dateValue: any) {
     if (!dateValue) return "Unknown date";
 
-    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    let date: Date;
+
+    // Handle different date types
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else if (dateValue && typeof dateValue === 'object' && 'toDate' in dateValue && typeof dateValue.toDate === 'function') {
+      // Handle Firestore Timestamp
+      date = dateValue.toDate();
+    } else if (typeof dateValue === 'string') {
+      // Handle string date
+      date = new Date(dateValue);
+    } else {
+      console.warn("Unknown date format:", dateValue);
+      return "Unknown date";
+    }
 
     // Check if date is valid
     if (isNaN(date.getTime())) {
@@ -212,15 +251,36 @@ const RestaurantsContent = () => {
     );
   }
 
+  // Handle refreshing the restaurants list after adding a new restaurant
+  const handleRestaurantAdded = () => {
+    queryClient.invalidateQueries({ queryKey: ["allRestaurants"] });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Restaurants</h1>
-        <Button className="bg-orange-600 hover:bg-orange-700">
+        <Button
+          className="bg-orange-600 hover:bg-orange-700"
+          onClick={() => setShowAddRestaurantModal(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Restaurant
         </Button>
       </div>
+
+      {/* Add Restaurant Modal */}
+      <Dialog open={showAddRestaurantModal} onOpenChange={setShowAddRestaurantModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Add New Restaurant</DialogTitle>
+          </DialogHeader>
+          <AddRestaurantForm
+            onSuccess={handleRestaurantAdded}
+            onClose={() => setShowAddRestaurantModal(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
@@ -321,6 +381,8 @@ const RestaurantsContent = () => {
                 <TableHead>Cuisine</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Rating</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Open Status</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -329,7 +391,7 @@ const RestaurantsContent = () => {
             <TableBody>
               {filteredRestaurants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <div className="flex flex-col items-center justify-center text-gray-500">
                       <Store className="h-12 w-12 mb-2 opacity-20" />
                       <p className="text-lg font-medium">No restaurants found</p>
@@ -347,10 +409,17 @@ const RestaurantsContent = () => {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10 rounded-md">
-                          <AvatarImage
-                            src={`https://api.dicebear.com/7.x/initials/svg?seed=${restaurant.name}`}
-                            alt={restaurant.name}
-                          />
+                          {restaurant.display_picture ? (
+                            <AvatarImage
+                              src={restaurant.display_picture}
+                              alt={restaurant.name}
+                            />
+                          ) : (
+                            <AvatarImage
+                              src={`https://api.dicebear.com/7.x/initials/svg?seed=${restaurant.name}`}
+                              alt={restaurant.name}
+                            />
+                          )}
                           <AvatarFallback className="rounded-md">
                             <Store className="h-5 w-5" />
                           </AvatarFallback>
@@ -402,6 +471,23 @@ const RestaurantsContent = () => {
                     </TableCell>
                     <TableCell>{renderPriceRange(restaurant.priceRange)}</TableCell>
                     <TableCell>{renderRating(restaurant.rating)}</TableCell>
+                    <TableCell>
+                      <RestaurantOwner ownerId={restaurant.owner_id} />
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          isRestaurantOpen(restaurant.working_hours)
+                            ? "bg-green-100 text-green-800 hover:bg-green-100"
+                            : "bg-gray-100 text-gray-800 hover:bg-gray-100"
+                        }
+                      >
+                        {isRestaurantOpen(restaurant.working_hours) ? "Open" : "Closed"}
+                      </Badge>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {getTodayHours(restaurant.working_hours)}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         className={

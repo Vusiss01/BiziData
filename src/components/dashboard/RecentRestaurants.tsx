@@ -35,11 +35,17 @@ const RecentRestaurants = () => {
         // Process results
         const restaurantData = snapshot.docs.map(doc => {
           const data = doc.data();
+          // Ensure rating is a valid number
+          let rating = 0;
+          if (data.rating !== undefined && data.rating !== null) {
+            rating = typeof data.rating === 'number' ? data.rating : 0;
+          }
+
           return convertTimestamps({
             id: doc.id,
             name: data.name || 'Unnamed Restaurant',
             cuisine: data.cuisine || 'Various',
-            rating: data.rating || 0,
+            rating: rating,
             address: data.address || 'No address',
             created_at: data.created_at
           });
@@ -56,40 +62,69 @@ const RecentRestaurants = () => {
 
 
   // Helper function to format date
-  const formatDate = (date: Date): string => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }).format(date);
+  const formatDate = (date: Date | null | undefined): string => {
+    try {
+      if (!date) {
+        return 'Unknown date';
+      }
+
+      // Check if date is valid
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        console.warn('Invalid date:', date);
+        return 'Unknown date';
+      }
+
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }).format(date);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Unknown date';
+    }
   };
 
   // Helper function to render stars
   const renderStars = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
+    try {
+      // Ensure rating is a valid number
+      const validRating = typeof rating === 'number' && !isNaN(rating) ? rating : 0;
 
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <Star key={`full-${i}`} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-      );
+      // Clamp rating between 0 and 5
+      const clampedRating = Math.max(0, Math.min(5, validRating));
+
+      const stars = [];
+      const fullStars = Math.floor(clampedRating);
+      const hasHalfStar = clampedRating % 1 >= 0.5;
+
+      for (let i = 0; i < fullStars; i++) {
+        stars.push(
+          <Star key={`full-${i}`} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+        );
+      }
+
+      if (hasHalfStar) {
+        stars.push(
+          <Star key="half" className="h-4 w-4 fill-yellow-400 text-yellow-400 half-filled" />
+        );
+      }
+
+      const emptyStars = 5 - stars.length;
+      for (let i = 0; i < emptyStars; i++) {
+        stars.push(
+          <Star key={`empty-${i}`} className="h-4 w-4 text-gray-300" />
+        );
+      }
+
+      return stars;
+    } catch (error) {
+      console.error('Error rendering stars:', error);
+      // Return 5 empty stars as fallback
+      return Array(5).fill(null).map((_, i) => (
+        <Star key={`empty-fallback-${i}`} className="h-4 w-4 text-gray-300" />
+      ));
     }
-
-    if (hasHalfStar) {
-      stars.push(
-        <Star key="half" className="h-4 w-4 fill-yellow-400 text-yellow-400 half-filled" />
-      );
-    }
-
-    const emptyStars = 5 - stars.length;
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <Star key={`empty-${i}`} className="h-4 w-4 text-gray-300" />
-      );
-    }
-
-    return stars;
   };
 
   return (
@@ -116,8 +151,8 @@ const RecentRestaurants = () => {
                   <h3 className="font-medium">{restaurant.name}</h3>
                   <p className="text-sm text-gray-500">{restaurant.cuisine}</p>
                   <div className="flex items-center mt-1">
-                    {renderStars(restaurant.rating)}
-                    <span className="text-sm ml-1">{restaurant.rating.toFixed(1)}</span>
+                    {renderStars(restaurant.rating || 0)}
+                    <span className="text-sm ml-1">{(restaurant.rating || 0).toFixed(1)}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">{restaurant.address}</p>
                 </div>

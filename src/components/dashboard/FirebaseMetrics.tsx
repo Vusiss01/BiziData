@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertCircle, Utensils, ShoppingBag, Users, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, Utensils, ShoppingBag, Users, Clock, Database } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { getDataModelsCount, initializeDefaultDataModels } from '@/services/dataModelService';
+import { initializeAllSampleData } from '@/services/sampleDataService';
 
 const FirebaseMetrics = () => {
   // Get start of today for filtering today's orders
@@ -14,9 +16,35 @@ const FirebaseMetrics = () => {
   const lastMonth = new Date();
   lastMonth.setMonth(lastMonth.getMonth() - 1);
 
+  // Initialize sample data if none exists
+  useEffect(() => {
+    // First initialize data models
+    initializeDefaultDataModels()
+      .then(success => {
+        if (success) {
+          console.log('Data models initialized or already exist');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to initialize data models:', error);
+      });
+
+    // Then initialize sample restaurants, orders, and users
+    initializeAllSampleData()
+      .then(success => {
+        if (success) {
+          console.log('Sample data initialized or already exists');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to initialize sample data:', error);
+      });
+  }, []);
+
   // Query for active restaurants
   const { data: activeRestaurants, isLoading: isLoadingRestaurants, error: restaurantsError } = useQuery({
     queryKey: ['activeRestaurants'],
+    refetchInterval: 5000, // Refetch every 5 seconds to ensure we get fresh data
     queryFn: async () => {
       try {
         console.log('Fetching active restaurants from Firebase');
@@ -72,7 +100,7 @@ const FirebaseMetrics = () => {
       } catch (error) {
         console.error('Error fetching active restaurants:', error);
         return {
-          count: 1,
+          count: 0,
           percentChange: 0
         };
       }
@@ -82,6 +110,7 @@ const FirebaseMetrics = () => {
   // Query for today's orders
   const { data: todayOrders, isLoading: isLoadingOrders, error: ordersError } = useQuery({
     queryKey: ['todayOrders'],
+    refetchInterval: 5000, // Refetch every 5 seconds
     queryFn: async () => {
       try {
         console.log('Fetching today\'s orders from Firebase');
@@ -113,6 +142,7 @@ const FirebaseMetrics = () => {
   // Query for active users
   const { data: activeUsers, isLoading: isLoadingUsers, error: usersError } = useQuery({
     queryKey: ['activeUsers'],
+    refetchInterval: 5000, // Refetch every 5 seconds
     queryFn: async () => {
       try {
         console.log('Fetching active users from Firebase');
@@ -166,9 +196,37 @@ const FirebaseMetrics = () => {
     },
   });
 
+  // Query for data models
+  const { data: dataModels, isLoading: isLoadingDataModels, error: dataModelsError } = useQuery({
+    queryKey: ['dataModelsCount'],
+    refetchInterval: 5000, // Refetch every 5 seconds
+    queryFn: async () => {
+      try {
+        console.log('Fetching data models count from Firebase');
+
+        // Get count of data models
+        const count = await getDataModelsCount();
+
+        console.log(`Found ${count} data models`);
+
+        return {
+          count: count || 0,
+          label: 'Active schemas'
+        };
+      } catch (error) {
+        console.error('Error fetching data models:', error);
+        return {
+          count: 0,
+          label: 'Active schemas'
+        };
+      }
+    },
+  });
+
   // Query for average delivery time
   const { data: deliveryTime, isLoading: isLoadingDelivery, error: deliveryError } = useQuery({
     queryKey: ['deliveryTime'],
+    refetchInterval: 5000, // Refetch every 5 seconds
     queryFn: async () => {
       try {
         console.log('Fetching delivery time data from Firebase');
@@ -326,6 +384,38 @@ const FirebaseMetrics = () => {
         </CardContent>
       </Card>
 
+      {/* Data Models Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">
+            Data Models
+          </CardTitle>
+          <Database className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          {isLoadingDataModels ? (
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Loading...</span>
+            </div>
+          ) : dataModelsError ? (
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <span className="text-sm text-red-500">Error loading data</span>
+            </div>
+          ) : (
+            <>
+              <div className="text-2xl font-bold">
+                {dataModels?.count || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {dataModels?.label || 'Active schemas'}
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Active Users Card */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -353,44 +443,6 @@ const FirebaseMetrics = () => {
               {activeUsers?.percentChange !== 0 ? (
                 <p className="text-xs text-green-600 mt-1 flex items-center">
                   {activeUsers?.percentChange > 0 ? '+' : ''}{activeUsers?.percentChange}% from last month
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-1">
-                  No change from last month
-                </p>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Avg. Delivery Time Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">
-            Avg. Delivery Time
-          </CardTitle>
-          <Clock className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          {isLoadingDelivery ? (
-            <div className="flex items-center space-x-2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Loading...</span>
-            </div>
-          ) : deliveryError ? (
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-red-500">Error loading data</span>
-            </div>
-          ) : (
-            <>
-              <div className="text-2xl font-bold">
-                {deliveryTime?.avgMinutes} min
-              </div>
-              {deliveryTime?.percentChange !== 0 ? (
-                <p className={`text-xs mt-1 flex items-center ${deliveryTime?.percentChange < 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {deliveryTime?.percentChange > 0 ? '+' : ''}{deliveryTime?.percentChange}% from last month
                 </p>
               ) : (
                 <p className="text-xs text-gray-500 mt-1">
