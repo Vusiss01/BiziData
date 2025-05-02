@@ -1,6 +1,7 @@
 import { collection, query, getDocs, addDoc, Timestamp, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ErrorCategory, handleError } from '@/utils/errorHandler';
+import { initializeDefaultDocumentation } from './documentationService';
 
 /**
  * Initialize sample restaurants if none exist
@@ -10,14 +11,14 @@ export const initializeSampleRestaurants = async (): Promise<boolean> => {
     // Check if we already have restaurants
     const restaurantsQuery = query(collection(db, 'restaurants'), limit(1));
     const snapshot = await getDocs(restaurantsQuery);
-    
+
     if (!snapshot.empty) {
       console.log('Restaurants already exist, skipping initialization');
       return true;
     }
-    
+
     console.log('Initializing sample restaurants');
-    
+
     // Sample restaurants
     const sampleRestaurants = [
       {
@@ -136,12 +137,12 @@ export const initializeSampleRestaurants = async (): Promise<boolean> => {
         updated_at: Timestamp.now()
       }
     ];
-    
+
     // Add each restaurant
     for (const restaurant of sampleRestaurants) {
       await addDoc(collection(db, 'restaurants'), restaurant);
     }
-    
+
     console.log('Sample restaurants initialized successfully');
     return true;
   } catch (error) {
@@ -161,20 +162,20 @@ export const initializeSampleOrders = async (): Promise<boolean> => {
     // Check if we already have orders
     const ordersQuery = query(collection(db, 'orders'), limit(1));
     const snapshot = await getDocs(ordersQuery);
-    
+
     if (!snapshot.empty) {
       console.log('Orders already exist, skipping initialization');
       return true;
     }
-    
+
     // Get restaurants to reference in orders
     const restaurantsQuery = query(collection(db, 'restaurants'));
     const restaurantsSnapshot = await getDocs(restaurantsQuery);
-    
+
     if (restaurantsSnapshot.empty) {
       console.log('No restaurants found, initializing sample restaurants first');
       await initializeSampleRestaurants();
-      
+
       // Get restaurants again
       const newRestaurantsSnapshot = await getDocs(restaurantsQuery);
       if (newRestaurantsSnapshot.empty) {
@@ -182,15 +183,15 @@ export const initializeSampleOrders = async (): Promise<boolean> => {
         return false;
       }
     }
-    
+
     // Get restaurant data
     const restaurants = restaurantsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
-    
+
     console.log('Initializing sample orders');
-    
+
     // Sample orders
     const sampleOrders = [
       {
@@ -289,12 +290,12 @@ export const initializeSampleOrders = async (): Promise<boolean> => {
         updated_at: Timestamp.now()
       }
     ];
-    
+
     // Add each order
     for (const order of sampleOrders) {
       await addDoc(collection(db, 'orders'), order);
     }
-    
+
     console.log('Sample orders initialized successfully');
     return true;
   } catch (error) {
@@ -314,14 +315,14 @@ export const initializeSampleUsers = async (): Promise<boolean> => {
     // Check if we already have users
     const usersQuery = query(collection(db, 'users'), limit(1));
     const snapshot = await getDocs(usersQuery);
-    
+
     if (!snapshot.empty) {
       console.log('Users already exist, skipping initialization');
       return true;
     }
-    
+
     console.log('Initializing sample users');
-    
+
     // Sample users
     const sampleUsers = [
       {
@@ -419,12 +420,12 @@ export const initializeSampleUsers = async (): Promise<boolean> => {
         updated_at: Timestamp.now()
       }
     ];
-    
+
     // Add each user
     for (const user of sampleUsers) {
       await addDoc(collection(db, 'users'), user);
     }
-    
+
     console.log('Sample users initialized successfully');
     return true;
   } catch (error) {
@@ -442,28 +443,35 @@ export const initializeSampleUsers = async (): Promise<boolean> => {
 export const initializeAllSampleData = async (): Promise<boolean> => {
   try {
     console.log('Initializing all sample data');
-    
+
     // Initialize users first
     const usersInitialized = await initializeSampleUsers();
     if (!usersInitialized) {
       console.error('Failed to initialize sample users');
       return false;
     }
-    
+
     // Initialize restaurants
     const restaurantsInitialized = await initializeSampleRestaurants();
     if (!restaurantsInitialized) {
       console.error('Failed to initialize sample restaurants');
       return false;
     }
-    
+
     // Initialize orders
     const ordersInitialized = await initializeSampleOrders();
     if (!ordersInitialized) {
       console.error('Failed to initialize sample orders');
       return false;
     }
-    
+
+    // Initialize documentation
+    const documentationInitialized = await initializeDefaultDocumentation();
+    if (!documentationInitialized) {
+      console.error('Failed to initialize documentation');
+      return false;
+    }
+
     console.log('All sample data initialized successfully');
     return true;
   } catch (error) {

@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Search, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { initializeDefaultDocumentation } from "@/services/documentationService";
+import { loadLocalDocumentation, DOCUMENTATION_CATEGORIES } from "@/utils/documentationUtils";
+import ReactMarkdown from 'react-markdown';
 
 interface DocumentItem {
   id: string;
@@ -24,19 +26,49 @@ const DocumentationPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
 
-  // Fetch documentation from Firebase
+  // Initialize documentation if none exists
+  useEffect(() => {
+    initializeDefaultDocumentation()
+      .then(success => {
+        if (success) {
+          console.log('Documentation initialized or already exists');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to initialize documentation:', error);
+      });
+  }, []);
+
+  // Fetch documentation from local files first, then try Firebase as fallback
   const { data: documents = [], isLoading, error } = useQuery({
     queryKey: ["documentation", activeCategory],
     queryFn: async () => {
       try {
-        console.log("Fetching documentation from Firebase");
-        
+        console.log("Loading documentation from local files");
+
+        // Load documentation from local markdown files
+        const localDocs = await loadLocalDocumentation();
+
+        if (localDocs.length > 0) {
+          console.log(`Loaded ${localDocs.length} documentation items from local files`);
+
+          // Filter by category if needed
+          if (activeCategory !== "all") {
+            return localDocs.filter(doc => doc.category === activeCategory);
+          }
+
+          return localDocs;
+        }
+
+        // If no local docs, try Firebase as fallback
+        console.log("No local documentation found, trying Firebase");
+
         // Create base query
         let docsQuery = query(
           collection(db, "documentation"),
           orderBy("created_at", "desc")
         );
-        
+
         // Add category filter if not "all"
         if (activeCategory !== "all") {
           docsQuery = query(
@@ -45,12 +77,12 @@ const DocumentationPage = () => {
             orderBy("created_at", "desc")
           );
         }
-        
+
         // Execute query
         const snapshot = await getDocs(docsQuery);
-        
-        console.log(`Query returned ${snapshot.docs.length} documentation items`);
-        
+
+        console.log(`Query returned ${snapshot.docs.length} documentation items from Firebase`);
+
         // Process results
         const docsData = snapshot.docs.map((doc) => {
           const data = doc.data();
@@ -66,7 +98,7 @@ const DocumentationPage = () => {
             url: data.url
           };
         });
-        
+
         return docsData;
       } catch (err) {
         console.error("Error fetching documentation:", err);
@@ -198,9 +230,8 @@ const DocumentationPage = () => {
                   </CardHeader>
                   <CardContent>
                     <p className="text-gray-500 mb-4">{doc.description}</p>
-                    <div className="prose max-w-none">
-                      {/* In a real app, you might want to render markdown content */}
-                      <p>{doc.content}</p>
+                    <div className="prose prose-headings:text-orange-600 prose-a:text-blue-600 prose-code:bg-gray-100 prose-code:p-1 prose-code:rounded prose-code:text-sm max-w-none">
+                      <ReactMarkdown>{doc.content}</ReactMarkdown>
                     </div>
                     {doc.tags && doc.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-4">

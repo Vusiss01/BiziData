@@ -89,6 +89,15 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Documentation collection
+    match /documentation/{docId} {
+      // Anyone can read documentation
+      allow read: if isAuthenticated();
+
+      // Only admins can create, update, or delete documentation
+      allow write: if isAdmin();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;
