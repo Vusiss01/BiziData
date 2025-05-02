@@ -336,7 +336,17 @@ const UserManagementPage = () => {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={user.profile_image_url || undefined} />
+                      <AvatarImage
+                        src={user.profile_image_url || undefined}
+                        alt={user.name || 'User'}
+                        onError={(e) => {
+                          // If image fails to load, set src to undefined to show fallback
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null; // Prevent infinite loop
+                          target.src = ''; // Clear the src
+                          console.log(`Image failed to load for user ${user.id}`);
+                        }}
+                      />
                       <AvatarFallback className="bg-orange-100 text-orange-800">
                         {user.name?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>

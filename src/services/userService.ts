@@ -122,11 +122,27 @@ export async function getUsers(options: UserFilterOptions = {}) {
     // Process results
     const users = snapshot.docs.map(doc => {
       const data = doc.data();
+
+      // Log user data for debugging
+      console.log(`Processing user ${doc.id}:`, {
+        name: data.name,
+        email: data.email,
+        profile_image_url: data.profile_image_url,
+        avatar_url: data.avatar_url // Some users might have avatar_url instead
+      });
+
+      // Check for profile image in different possible fields
+      const profileImageUrl = data.profile_image_url || data.avatar_url || null;
+
+      console.log(`Final profile image URL for ${doc.id}:`, profileImageUrl);
+
       return {
         id: doc.id,
         ...data,
         created_at: data.created_at?.toDate?.() || data.created_at,
-        updated_at: data.updated_at?.toDate?.() || data.updated_at
+        updated_at: data.updated_at?.toDate?.() || data.updated_at,
+        // Ensure profile_image_url is properly set, checking multiple possible fields
+        profile_image_url: profileImageUrl
       };
     });
 
@@ -195,7 +211,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "admin" as UserRole,
       phone: "+1234567890",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-admin-1%2Fprofile.jpg?alt=media"
     },
     {
       id: "mock-owner-1",
@@ -204,7 +221,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "owner" as UserRole,
       phone: "+1234567891",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-owner-1%2Fprofile.jpg?alt=media"
     },
     {
       id: "mock-owner-2",
@@ -213,7 +231,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "owner" as UserRole,
       phone: "+1234567894",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-owner-2%2Fprofile.jpg?alt=media"
     },
     {
       id: "mock-owner-3",
@@ -222,7 +241,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "owner" as UserRole,
       phone: "+1234567895",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-owner-3%2Fprofile.jpg?alt=media"
     },
     {
       id: "mock-driver-1",
@@ -231,7 +251,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "driver" as UserRole,
       phone: "+1234567892",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-driver-1%2Fprofile.jpg?alt=media"
     },
     {
       id: "mock-customer-1",
@@ -240,7 +261,8 @@ function getMockUsers(role?: UserRole | UserRole[]): any[] {
       role: "customer" as UserRole,
       phone: "+1234567893",
       created_at: timestamp,
-      updated_at: timestamp
+      updated_at: timestamp,
+      profile_image_url: "https://firebasestorage.googleapis.com/v0/b/bizibase.firebasestorage.app/o/profile-images%2Fmock-customer-1%2Fprofile.jpg?alt=media"
     }
   ];
 

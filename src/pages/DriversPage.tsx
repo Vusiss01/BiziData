@@ -34,6 +34,8 @@ const DriversPage = () => {
     queryKey: ['drivers'],
     queryFn: getAllDrivers,
     enabled: !!user, // Only run query if user is authenticated
+    staleTime: 0, // Don't cache the data
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   const filteredDrivers = drivers.filter(
@@ -47,13 +49,24 @@ const DriversPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Drivers</h1>
-        <Button
-          className="bg-orange-600 hover:bg-orange-700"
-          onClick={() => setIsAddDialogOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Driver
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              console.log('Manual refresh triggered');
+              refetch();
+            }}
+          >
+            Refresh List
+          </Button>
+          <Button
+            className="bg-orange-600 hover:bg-orange-700"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Driver
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">
@@ -170,8 +183,11 @@ const DriversPage = () => {
           <AddDriverForm
             onClose={() => setIsAddDialogOpen(false)}
             onSuccess={() => {
-              // Refresh the drivers list
-              refetch();
+              console.log('Driver added successfully, refreshing list...');
+              // Force invalidate the query cache and refetch
+              setTimeout(() => {
+                refetch();
+              }, 1000); // Add a small delay to ensure Firestore has time to update
             }}
           />
         </DialogContent>

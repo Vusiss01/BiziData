@@ -18,6 +18,15 @@ export interface Driver {
   avatar_url?: string;
   created_at?: Date | Timestamp;
   updated_at?: Date | Timestamp;
+  // Additional fields
+  address?: string;
+  license_number?: string;
+  bio?: string;
+  region_id?: string;
+  display_name?: string;
+  document_url?: string;
+  document_type?: string;
+  vehicle_image_url?: string;
 }
 
 export interface DriverDetails {
@@ -31,6 +40,14 @@ export interface DriverDetails {
   rating: number;
   vehicleType: string;
   avatarUrl?: string;
+  // Additional fields
+  address?: string;
+  licenseNumber?: string;
+  bio?: string;
+  regionId?: string;
+  displayName?: string;
+  licenseDocumentUrl?: string;
+  vehicleImageUrl?: string;
 }
 
 /**
@@ -39,19 +56,21 @@ export interface DriverDetails {
 export const getAllDrivers = async (): Promise<DriverDetails[]> => {
   try {
     // Create query for users with driver role
+    // Temporarily remove orderBy to avoid index issues
     const driversQuery = query(
       collection(db, 'users'),
-      where('role', '==', 'driver'),
-      orderBy('created_at', 'desc')
+      where('role', '==', 'driver')
     );
-    
+
+    console.log('Fetching drivers with query:', driversQuery);
+
     // Execute query
     const snapshot = await getDocs(driversQuery);
-    
+
     if (snapshot.empty) {
       return [];
     }
-    
+
     // Process driver data
     const drivers = snapshot.docs.map(doc => {
       const data = doc.data();
@@ -65,12 +84,21 @@ export const getAllDrivers = async (): Promise<DriverDetails[]> => {
         completedOrders: data.completed_orders || 0,
         rating: data.rating || 0,
         vehicleType: data.vehicle_type || 'Car',
-        avatarUrl: data.avatar_url
+        avatarUrl: data.avatar_url,
+        // Additional fields
+        address: data.address,
+        licenseNumber: data.license_number,
+        bio: data.bio,
+        regionId: data.region_id,
+        displayName: data.display_name || data.name,
+        licenseDocumentUrl: data.document_url,
+        vehicleImageUrl: data.vehicle_image_url
       }) as DriverDetails;
     });
-    
+
     return drivers;
   } catch (error) {
+    console.error('Error fetching drivers:', error);
     handleError(error, {
       message: 'Failed to fetch drivers',
       category: ErrorCategory.DATABASE
@@ -86,17 +114,17 @@ export const getDriverById = async (driverId: string): Promise<DriverDetails | n
   try {
     const docRef = doc(db, 'users', driverId);
     const docSnap = await getDocs(query(collection(db, 'users'), where('__name__', '==', driverId)));
-    
+
     if (docSnap.empty) {
       return null;
     }
-    
+
     const data = docSnap.docs[0].data();
-    
+
     if (data.role !== 'driver') {
       return null;
     }
-    
+
     return convertTimestamps({
       id: docSnap.docs[0].id,
       name: data.name || 'Unknown Driver',
@@ -107,7 +135,15 @@ export const getDriverById = async (driverId: string): Promise<DriverDetails | n
       completedOrders: data.completed_orders || 0,
       rating: data.rating || 0,
       vehicleType: data.vehicle_type || 'Car',
-      avatarUrl: data.avatar_url
+      avatarUrl: data.avatar_url,
+      // Additional fields
+      address: data.address,
+      licenseNumber: data.license_number,
+      bio: data.bio,
+      regionId: data.region_id,
+      displayName: data.display_name || data.name,
+      licenseDocumentUrl: data.document_url,
+      vehicleImageUrl: data.vehicle_image_url
     }) as DriverDetails;
   } catch (error) {
     handleError(error, {
@@ -124,15 +160,18 @@ export const getDriverById = async (driverId: string): Promise<DriverDetails | n
  */
 export const addDriver = async (driver: Omit<Driver, 'id' | 'created_at' | 'updated_at'>): Promise<string | null> => {
   try {
+    console.log('Adding new driver with data:', driver);
+
     // Add timestamp fields
     const driverWithTimestamps = {
       ...driver,
       created_at: Timestamp.now(),
       updated_at: Timestamp.now()
     };
-    
+
     // Add to Firestore
     const docRef = await addDoc(collection(db, 'users'), driverWithTimestamps);
+    console.log('Driver added successfully with ID:', docRef.id);
     return docRef.id;
   } catch (error) {
     handleError(error, {
@@ -154,7 +193,7 @@ export const updateDriver = async (driverId: string, updates: Partial<Driver>): 
       ...updates,
       updated_at: Timestamp.now()
     };
-    
+
     // Update in Firestore
     await updateDoc(doc(db, 'users', driverId), updatesWithTimestamp);
     return true;
@@ -192,22 +231,56 @@ export const uploadDriverAvatar = async (driverId: string, file: File): Promise<
   try {
     const storage = getStorage();
     const avatarRef = ref(storage, `profile-images/${driverId}/${file.name}`);
-    
+
     // Upload file
     await uploadBytes(avatarRef, file);
-    
+
     // Get download URL
     const downloadURL = await getDownloadURL(avatarRef);
-    
+
     // Update driver with avatar URL
     await updateDriver(driverId, { avatar_url: downloadURL });
-    
+
     return downloadURL;
   } catch (error) {
     handleError(error, {
       message: 'Failed to upload driver avatar',
       category: ErrorCategory.STORAGE,
       context: { driverId }
+    });
+    return null;
+  }
+};
+
+/**
+ * Upload driver document (license or vehicle image)
+ * @param driverId The ID of the driver
+ * @param file The file to upload
+ * @param documentType The type of document ('license' or 'vehicle')
+ * @returns The download URL of the uploaded file, or null if upload failed
+ */
+export const uploadDriverDocument = async (
+  driverId: string,
+  file: File,
+  documentType: 'license' | 'vehicle'
+): Promise<string | null> => {
+  try {
+    const storage = getStorage();
+    const folderPath = documentType === 'license' ? 'driver-licenses' : 'vehicle-images';
+    const docRef = ref(storage, `${folderPath}/${driverId}/${file.name}`);
+
+    // Upload file
+    await uploadBytes(docRef, file);
+
+    // Get download URL
+    const downloadURL = await getDownloadURL(docRef);
+
+    return downloadURL;
+  } catch (error) {
+    handleError(error, {
+      message: `Failed to upload driver ${documentType}`,
+      category: ErrorCategory.STORAGE,
+      context: { driverId, documentType }
     });
     return null;
   }

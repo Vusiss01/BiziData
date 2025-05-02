@@ -144,8 +144,18 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
       return;
     }
 
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.password || !formData.phone) {
+    // Basic validation for all required fields
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.password ||
+      !formData.phone ||
+      !formData.address ||
+      !formData.current_suburb ||
+      !formData.vehicle_type ||
+      !formData.license_number ||
+      !formData.region_id
+    ) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -154,10 +164,20 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
       return;
     }
 
+    // Validate license document if required
+    if (!licenseFile) {
+      toast({
+        title: "Validation Error",
+        description: "Please upload a driver's license document",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Use our handleAsync utility for better error handling
     await handleAsync(
       async () => {
-        // Create driver in Firebase
+        // Create driver in Firebase with all form fields
         const driverId = await addDriver({
           name: formData.name,
           email: formData.email,
@@ -168,7 +188,13 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
           current_suburb: formData.current_suburb,
           vehicle_type: formData.vehicle_type,
           rating: 0,
-          completed_orders: 0
+          completed_orders: 0,
+          // Add missing fields
+          address: formData.address,
+          license_number: formData.license_number,
+          bio: formData.bio,
+          region_id: formData.region_id,
+          display_name: formData.display_name || formData.name, // Use name as fallback
         });
 
         if (!driverId) {
@@ -183,8 +209,34 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
           }
         }
 
-        // TODO: Save vehicle details and license to a separate table
-        // This would be implemented in a real application
+        // Upload license document if provided
+        if (licenseFile) {
+          try {
+            const licenseUrl = await uploadDriverDocument(driverId, licenseFile, 'license');
+            if (licenseUrl) {
+              // Update driver with license document URL
+              await updateDriver(driverId, {
+                document_url: licenseUrl,
+                document_type: 'driver_license'
+              });
+            }
+          } catch (error) {
+            console.warn("Failed to upload license document, but driver was created", error);
+          }
+        }
+
+        // Upload vehicle image if provided
+        if (vehicleFile) {
+          try {
+            const vehicleImageUrl = await uploadDriverDocument(driverId, vehicleFile, 'vehicle');
+            if (vehicleImageUrl) {
+              // Update driver with vehicle image URL
+              await updateDriver(driverId, { vehicle_image_url: vehicleImageUrl });
+            }
+          } catch (error) {
+            console.warn("Failed to upload vehicle image, but driver was created", error);
+          }
+        }
 
         toast({
           title: "Success",
