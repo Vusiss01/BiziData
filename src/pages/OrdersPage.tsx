@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -26,19 +26,11 @@ import {
   MoreVertical,
   Calendar,
   ArrowUpDown,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
-
-interface Order {
-  id: string;
-  restaurant: string;
-  restaurantLogo?: string;
-  customer: string;
-  items: number;
-  total: number;
-  status: "pending" | "preparing" | "ready" | "delivered" | "cancelled";
-  date: string;
-  time: string;
-}
+import { useQuery } from "@tanstack/react-query";
+import { getAllOrders, getOrderStatistics, OrderSummary } from "@/services/orderService";
 
 const OrdersPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,96 +38,24 @@ const OrdersPage = () => {
   const [sortBy, setSortBy] = useState<string>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const orders: Order[] = [
-    {
-      id: "ORD-1234",
-      restaurant: "Pizza Palace",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=PP",
-      customer: "John Smith",
-      items: 3,
-      total: 42.5,
-      status: "delivered",
-      date: "2023-06-15",
-      time: "12:30 PM",
-    },
-    {
-      id: "ORD-1235",
-      restaurant: "Burger Bonanza",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=BB",
-      customer: "Sarah Johnson",
-      items: 2,
-      total: 25.99,
-      status: "preparing",
-      date: "2023-06-15",
-      time: "1:45 PM",
-    },
-    {
-      id: "ORD-1236",
-      restaurant: "Sushi Supreme",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=SS",
-      customer: "David Chen",
-      items: 5,
-      total: 68.75,
-      status: "pending",
-      date: "2023-06-15",
-      time: "2:15 PM",
-    },
-    {
-      id: "ORD-1237",
-      restaurant: "Taco Time",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=TT",
-      customer: "Maria Garcia",
-      items: 4,
-      total: 32.5,
-      status: "ready",
-      date: "2023-06-15",
-      time: "3:00 PM",
-    },
-    {
-      id: "ORD-1238",
-      restaurant: "Pasta Paradise",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=PP2",
-      customer: "James Wilson",
-      items: 2,
-      total: 29.99,
-      status: "cancelled",
-      date: "2023-06-15",
-      time: "3:30 PM",
-    },
-    {
-      id: "ORD-1239",
-      restaurant: "Pizza Palace",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=PP",
-      customer: "Emily Brown",
-      items: 1,
-      total: 15.99,
-      status: "delivered",
-      date: "2023-06-14",
-      time: "7:45 PM",
-    },
-    {
-      id: "ORD-1240",
-      restaurant: "Burger Bonanza",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=BB",
-      customer: "Michael Taylor",
-      items: 3,
-      total: 34.5,
-      status: "delivered",
-      date: "2023-06-14",
-      time: "6:30 PM",
-    },
-    {
-      id: "ORD-1241",
-      restaurant: "Sushi Supreme",
-      restaurantLogo: "https://api.dicebear.com/7.x/initials/svg?seed=SS",
-      customer: "Jessica Martinez",
-      items: 4,
-      total: 52.75,
-      status: "delivered",
-      date: "2023-06-14",
-      time: "8:15 PM",
-    },
-  ];
+  // Fetch orders from Firebase using React Query
+  const {
+    data: orders = [],
+    isLoading: ordersLoading,
+    error: ordersError
+  } = useQuery({
+    queryKey: ['orders'],
+    queryFn: getAllOrders
+  });
+
+  // Fetch order statistics
+  const {
+    data: stats,
+    isLoading: statsLoading
+  } = useQuery({
+    queryKey: ['orderStats'],
+    queryFn: getOrderStatistics
+  });
 
   // Filter and sort orders
   const filteredOrders = orders
@@ -209,13 +129,13 @@ const OrdersPage = () => {
     }
   };
 
-  // Calculate statistics
-  const totalOrders = orders.length;
-  const pendingOrders = orders.filter((o) => o.status === "pending").length;
-  const preparingOrders = orders.filter((o) => o.status === "preparing").length;
-  const readyOrders = orders.filter((o) => o.status === "ready").length;
-  const deliveredOrders = orders.filter((o) => o.status === "delivered").length;
-  const cancelledOrders = orders.filter((o) => o.status === "cancelled").length;
+  // Use statistics from the query or calculate from orders if not available
+  const totalOrders = stats?.totalOrders || 0;
+  const pendingOrders = stats?.pendingOrders || 0;
+  const preparingOrders = stats?.preparingOrders || 0;
+  const readyOrders = stats?.readyOrders || 0;
+  const deliveredOrders = stats?.deliveredOrders || 0;
+  const cancelledOrders = stats?.cancelledOrders || 0;
 
   return (
     <div className="space-y-6">
@@ -238,7 +158,14 @@ const OrdersPage = () => {
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalOrders}</div>
+            {statsLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold">{totalOrders}</div>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-white">
@@ -246,9 +173,16 @@ const OrdersPage = () => {
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {pendingOrders}
-            </div>
+            {statsLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold text-yellow-600">
+                {pendingOrders}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-white">
@@ -256,9 +190,16 @@ const OrdersPage = () => {
             <CardTitle className="text-sm font-medium">Preparing</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {preparingOrders}
-            </div>
+            {statsLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold text-blue-600">
+                {preparingOrders}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-white">
@@ -268,9 +209,16 @@ const OrdersPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {readyOrders + deliveredOrders}
-            </div>
+            {statsLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold text-green-600">
+                {readyOrders + deliveredOrders}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-white">
@@ -278,9 +226,16 @@ const OrdersPage = () => {
             <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {cancelledOrders}
-            </div>
+            {statsLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold text-red-600">
+                {cancelledOrders}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -343,116 +298,131 @@ const OrdersPage = () => {
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Order ID</TableHead>
-                  <TableHead
-                    className="cursor-pointer"
-                    onClick={() => toggleSort("restaurant")}
-                  >
-                    <div className="flex items-center">
-                      Restaurant
-                      {sortBy === "restaurant" && (
-                        <ArrowUpDown className="ml-1 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead
-                    className="cursor-pointer"
-                    onClick={() => toggleSort("total")}
-                  >
-                    <div className="flex items-center">
-                      Total
-                      {sortBy === "total" && (
-                        <ArrowUpDown className="ml-1 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead
-                    className="cursor-pointer"
-                    onClick={() => toggleSort("date")}
-                  >
-                    <div className="flex items-center">
-                      Date/Time
-                      {sortBy === "date" && (
-                        <ArrowUpDown className="ml-1 h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
+            {ordersLoading ? (
+              <div className="flex justify-center items-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-orange-600 mr-2" />
+                <p>Loading orders...</p>
+              </div>
+            ) : ordersError ? (
+              <div className="flex justify-center items-center p-8 text-red-500">
+                <AlertCircle className="h-8 w-8 mr-2" />
+                <div>
+                  <p className="font-medium">Error loading orders</p>
+                  <p className="text-sm">Please try again later</p>
+                </div>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
-                      No orders found.
-                    </TableCell>
+                    <TableHead className="w-[100px]">Order ID</TableHead>
+                    <TableHead
+                      className="cursor-pointer"
+                      onClick={() => toggleSort("restaurant")}
+                    >
+                      <div className="flex items-center">
+                        Restaurant
+                        {sortBy === "restaurant" && (
+                          <ArrowUpDown className="ml-1 h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead
+                      className="cursor-pointer"
+                      onClick={() => toggleSort("total")}
+                    >
+                      <div className="flex items-center">
+                        Total
+                        {sortBy === "total" && (
+                          <ArrowUpDown className="ml-1 h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead
+                      className="cursor-pointer"
+                      onClick={() => toggleSort("date")}
+                    >
+                      <div className="flex items-center">
+                        Date/Time
+                        {sortBy === "date" && (
+                          <ArrowUpDown className="ml-1 h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            {order.restaurantLogo ? (
-                              <AvatarImage
-                                src={order.restaurantLogo}
-                                alt={order.restaurant}
-                              />
-                            ) : (
-                              <AvatarFallback>
-                                {order.restaurant.charAt(0)}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                          <span>{order.restaurant}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{order.customer}</TableCell>
-                      <TableCell>{order.items} items</TableCell>
-                      <TableCell>${order.total.toFixed(2)}</TableCell>
-                      <TableCell>{getStatusBadge(order.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm">{order.date}</span>
-                          <span className="text-xs text-gray-500">
-                            {order.time}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>View Details</DropdownMenuItem>
-                            <DropdownMenuItem>Update Status</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600">
-                              Cancel Order
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center">
+                        No orders found.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    filteredOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-medium">{order.id}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                              {order.restaurantLogo ? (
+                                <AvatarImage
+                                  src={order.restaurantLogo}
+                                  alt={order.restaurant}
+                                />
+                              ) : (
+                                <AvatarFallback>
+                                  {order.restaurant.charAt(0)}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                            <span>{order.restaurant}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{order.customer}</TableCell>
+                        <TableCell>{order.items} items</TableCell>
+                        <TableCell>${order.total.toFixed(2)}</TableCell>
+                        <TableCell>{getStatusBadge(order.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm">{order.date}</span>
+                            <span className="text-xs text-gray-500">
+                              {order.time}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>View Details</DropdownMenuItem>
+                              <DropdownMenuItem>Update Status</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-red-600">
+                                Cancel Order
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </CardContent>
       </Card>

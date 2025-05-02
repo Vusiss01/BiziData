@@ -15,6 +15,7 @@ import DriversPage from "./pages/DriversPage";
 import DashboardPage from "./pages/DashboardPage";
 import DebugPage from "./pages/DebugPage";
 import UserManagementPage from "./pages/UserManagementPage";
+import LiveTrackingPage from "./pages/LiveTrackingPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
@@ -50,6 +51,7 @@ function App() {
               <Route path="/restaurants" element={<RestaurantsPage />} />
               <Route path="/drivers" element={<DriversPage />} />
               <Route path="/users" element={<UserManagementPage />} />
+              <Route path="/live-tracking" element={<LiveTrackingPage />} />
               <Route path="/debug" element={<DebugPage />} />
             </Route>
           </Routes>

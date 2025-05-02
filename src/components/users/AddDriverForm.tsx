@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createUser } from "@/services/userService";
+import { addDriver, uploadDriverAvatar } from "@/services/driverService";
 import useErrorHandler from "@/hooks/useErrorHandler";
 import ErrorDisplay from "@/components/common/ErrorDisplay";
 import { ErrorCategory } from "@/utils/errorHandler";
@@ -156,24 +157,30 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
     // Use our handleAsync utility for better error handling
     await handleAsync(
       async () => {
-        // Create user with driver role
-        const result = await createUser({
+        // Create driver in Firebase
+        const driverId = await addDriver({
+          name: formData.name,
           email: formData.email,
           password: formData.password,
-          name: formData.name,
-          role: 'driver',
           phone: formData.phone,
-          address: formData.address,
+          role: 'driver',
+          is_verified: isVerified,
           current_suburb: formData.current_suburb,
-          profileImage: profileImage,
+          vehicle_type: formData.vehicle_type,
+          rating: 0,
+          completed_orders: 0
         });
 
-        if (result.error) {
-          throw result.error;
+        if (!driverId) {
+          throw new Error("Failed to create driver");
         }
 
-        if (!result.user) {
-          throw new Error("Failed to create driver");
+        // Upload profile image if provided
+        if (profileImage) {
+          const avatarUrl = await uploadDriverAvatar(driverId, profileImage);
+          if (!avatarUrl) {
+            console.warn("Failed to upload profile image, but driver was created");
+          }
         }
 
         // TODO: Save vehicle details and license to a separate table
@@ -181,7 +188,7 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
 
         toast({
           title: "Success",
-          description: `Driver "${result.user.name}" created successfully`,
+          description: `Driver "${formData.name}" created successfully`,
         });
 
         // Call success callback
@@ -192,7 +199,7 @@ const AddDriverForm = ({ onClose, onSuccess }: AddDriverFormProps) => {
         // Close form
         onClose();
 
-        return result;
+        return { driverId };
       },
       {
         action: 'createUser',

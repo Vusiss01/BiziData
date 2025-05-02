@@ -18,6 +18,7 @@ import {
   UserCog,
   Car,
   AlertCircle,
+  Map,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,6 +36,7 @@ const Sidebar = ({ className }: SidebarProps) => {
     { icon: UserCog, label: "Restaurant Owners", path: "/restaurant-owners" },
     { icon: Store, label: "Restaurants", path: "/restaurants" },
     { icon: Car, label: "Drivers", path: "/drivers" },
+    { icon: Map, label: "Live Tracking", path: "/live-tracking" },
     { icon: ShoppingBag, label: "Orders", path: "/orders", badge: 12 },
     { icon: Utensils, label: "Menu Items", path: "/menu-items" },
     { icon: Package, label: "Inventory", path: "/inventory" },
