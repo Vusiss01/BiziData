@@ -37,7 +37,7 @@ const Sidebar = ({ className }: SidebarProps) => {
     { icon: Store, label: "Restaurants", path: "/restaurants" },
     { icon: Car, label: "Drivers", path: "/drivers" },
     { icon: Map, label: "Live Tracking", path: "/live-tracking" },
-    { icon: ShoppingBag, label: "Orders", path: "/orders", badge: 12 },
+    { icon: ShoppingBag, label: "Orders", path: "/orders" },
     { icon: Utensils, label: "Menu Items", path: "/menu-items" },
     { icon: Package, label: "Inventory", path: "/inventory" },
     { icon: TrendingUp, label: "Analytics", path: "/analytics" },

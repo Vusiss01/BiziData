@@ -16,6 +16,12 @@ import DashboardPage from "./pages/DashboardPage";
 import DebugPage from "./pages/DebugPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import LiveTrackingPage from "./pages/LiveTrackingPage";
+import MenuItemsPage from "./pages/MenuItemsPage";
+import InventoryPage from "./pages/InventoryPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import DocumentationPage from "./pages/DocumentationPage";
+import SupportPage from "./pages/SupportPage";
+import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./components/auth/LoginPage";
 import SignupPage from "./components/auth/SignupPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
@@ -52,6 +58,12 @@ function App() {
               <Route path="/drivers" element={<DriversPage />} />
               <Route path="/users" element={<UserManagementPage />} />
               <Route path="/live-tracking" element={<LiveTrackingPage />} />
+              <Route path="/menu-items" element={<MenuItemsPage />} />
+              <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/documentation" element={<DocumentationPage />} />
+              <Route path="/support" element={<SupportPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/debug" element={<DebugPage />} />
             </Route>
           </Routes>
